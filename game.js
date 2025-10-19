@@ -1,0 +1,471 @@
+// =================================================================
+// GAME CONFIGURATION
+// =================================================================
+console.log("Juego Versión 3.3 - Master Listener de AdMob Activado");
+const FONT_STYLE = { fontFamily: '"Trebuchet MS", Arial, sans-serif', fontSize: '24px', fill: '#ffffff' };
+const CONTINUE_COST = 25;
+const PLAYER_COLORS = [0xffffff, 0x00a8f3, 0xf300bf, 0x93f300, 0xf3a800];
+let highscore = localStorage.getItem('ascensoZenHighscore') || 0;
+let totalFichas = parseInt(localStorage.getItem('ascensoZenFichas') || '0');
+let music;
+let adMobInitialized = false; // Flag para controlar la inicialización de AdMob
+
+// =================================================================
+// SECRET MESSAGE SYSTEM
+// =================================================================
+const SECRET_MESSAGE = [
+    "La corriente susurra...",
+    "...un secreto.",
+    "Sólo para aquellos...",
+    "...que ascienden.",
+    "En lo más profundo...",
+    "...la luz duerme.",
+    "Y en la superficie...",
+    "...espera.",
+    "El océano no tiene fin,",
+    "ni tampoco principio.",
+    "Sólo el eterno ascenso.",
+    "Sigue nadando,",
+    "sigue soñando.",
+    "La paz se encuentra...",
+    "...en el movimiento.",
+    "ZEN"
+];
+let maxFichasInRun = parseInt(localStorage.getItem('ascensoZenMaxFichas') || '0');
+
+// =================================================================
+// ADMOB INITIALIZATION & MASTER LISTENER
+// =================================================================
+document.addEventListener('deviceready', async () => {
+    const { AdMob } = Capacitor.Plugins;
+
+    // --- ✅ INICIO DE LA MODIFICACIÓN: MASTER LISTENER ---
+
+    // 1. Lista exhaustiva de todos los eventos posibles de AdMob.
+    const ALL_ADMOB_EVENTS = [
+        'admob:rewardedVideoAdLoaded', 'admob:rewardedVideoAdFailedToLoad',
+        'admob:rewardedVideoAdShown', 'admob:rewardedVideoAdFailedToShow',
+        'admob:rewardedVideoAdDismissed', 'admob:rewardedVideoAdCompleted',
+        'admob:interstitialAdLoaded', 'admob:interstitialAdFailedToLoad',
+        'admob:interstitialAdShown', 'admob:interstitialAdFailedToShow',
+        'admob:interstitialAdDismissed',
+        'admob:bannerAdLoaded', 'admob:bannerAdFailedToLoad',
+        'admob:bannerAdSize', 'admob:bannerAdOpened', 'admob:bannerAdClosed'
+    ];
+
+    // 2. Función que crea un listener genérico.
+    const createMasterListener = (eventName) => (data) => {
+        console.log(
+            `%c[MASTER LISTENER] 🕵️‍♂️ Evento recibido: ${eventName}`,
+            'background: #9933ff; color: #ffffff; padding: 3px 6px; border-radius: 3px; font-weight: bold;',
+            data || 'Sin datos adicionales.'
+        );
+    };
+
+    // 3. Añadimos el listener a CADA evento posible.
+    console.log("🔧 Instalando Master Listener para todos los eventos de AdMob...");
+    ALL_ADMOB_EVENTS.forEach(eventName => {
+        AdMob.addListener(eventName, createMasterListener(eventName));
+    });
+    console.log("✅ Master Listener de AdMob instalado.");
+    
+    // --- FIN DE LA MODIFICACIÓN ---
+
+    try {
+        await AdMob.initialize({
+            requestTrackingAuthorization: true,
+            testingDevices: [],
+            initializeForTesting: false,
+        });
+        adMobInitialized = true;
+        console.log("✅ AdMob inicializado correctamente a través del evento deviceready.");
+    } catch (e) {
+        console.error("❌ Error al inicializar AdMob:", e);
+    }
+}, false);
+
+
+// =================================================================
+// SCENE: PRELOADER
+// =================================================================
+class PreloaderScene extends Phaser.Scene {
+    constructor() { super('PreloaderScene'); }
+    preload() {
+        const progressBar = this.add.graphics(), progressBox = this.add.graphics();
+        progressBox.fillStyle(0x222222, 0.8).fillRect(this.scale.width / 2 - 160, this.scale.height / 2 - 30, 320, 50);
+        this.load.on('progress', v => { progressBar.clear().fillStyle(0xffffff, 1).fillRect(this.scale.width / 2 - 150, this.scale.height / 2 - 20, 300 * v, 30); });
+        this.load.on('complete', () => { progressBar.destroy(); progressBox.destroy(); this.scene.start('MainMenuScene'); });
+
+        this.load.image('background_vertical', 'assets/background_vertical.png');
+        this.load.image('player_medusa', 'assets/medusa.png');
+        this.load.image('obstacle_cangrejo', 'assets/cangrejo.png');
+        this.load.image('cangrejo_cerrado', 'assets/cangrejo_cerrado.png');
+        this.load.image('collectible_almeja', 'assets/almeja.png');
+        this.load.image('particle', 'assets/particle.png');
+        this.load.audio('music', 'audio/music.mp3');
+        this.load.audio('collect_sfx', 'audio/collect.wav');
+        this.load.audio('gameover_sfx', 'audio/gameover.wav');
+        this.load.audio('click_sfx', 'audio/click.wav');
+        this.load.audio('impulse_sfx', 'audio/impulso.mp3');
+    }
+}
+
+// =================================================================
+// SCENE: MAIN MENU
+// =================================================================
+class MainMenuScene extends Phaser.Scene {
+    constructor() { super('MainMenuScene'); }
+    create() {
+        this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
+        highscore = localStorage.getItem('ascensoZenHighscore') || 0;
+        totalFichas = parseInt(localStorage.getItem('ascensoZenFichas') || '0');
+        const title = this.add.text(this.scale.width / 2, this.scale.height * 0.2, 'Ascenso Zen', { fontFamily: 'Impact, "Arial Black", sans-serif', fontSize: '80px', stroke: '#001a33', strokeThickness: 8, shadow: { offsetX: 5, offsetY: 5, color: '#000000', blur: 8, stroke: true, fill: true } }).setOrigin(0.5);
+        const gradient = title.context.createLinearGradient(0, 0, 0, title.height);
+        gradient.addColorStop(0, '#87CEEB'); gradient.addColorStop(1, '#00BFFF');
+        title.setFill(gradient);
+        const playButton = this.add.text(this.scale.width / 2, this.scale.height * 0.45, 'JUGAR', { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
+        playButton.on('pointerdown', () => {
+            if (!music || !music.isPlaying) {
+                music = this.sound.add('music', { loop: true, volume: 0.4 });
+                music.play();
+            }
+            this.sound.play('click_sfx');
+            this.scene.start('GameScene', { score: 0, fichas: 0, hasContinued: false });
+        });
+        const secretButton = this.add.text(this.scale.width / 2, this.scale.height * 0.60, 'VER SECRETO', { ...FONT_STYLE, fontSize: '26px', backgroundColor: '#a88f00', padding: { x: 15, y: 8 } }).setOrigin(0.5).setInteractive();
+        secretButton.on('pointerdown', () => { this.sound.play('click_sfx'); this.scene.start('SecretScene'); });
+        this.add.text(this.scale.width / 2, this.scale.height - 100, `MÁXIMA PUNTUACIÓN: ${highscore}`, FONT_STYLE).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height - 50, `CONCHAS TOTALES: ${totalFichas}`, FONT_STYLE).setOrigin(0.5);
+    }
+    update() { this.background.tilePositionY -= 0.5; }
+}
+
+// =================================================================
+// SCENE: GAME
+// =================================================================
+class GameScene extends Phaser.Scene {
+    constructor() { super('GameScene'); }
+    init(data) {
+        this.score = data.score || 0;
+        this.fichas = data.fichas || 0;
+        this.hasContinued = data.hasContinued || false;
+        this.scoreMultiplier = 1;
+    }
+    create() {
+        this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
+        this.obstacles = this.physics.add.group({ immovable: true, allowGravity: false });
+        this.fichasGroup = this.physics.add.group({ allowGravity: false });
+        this.player = this.physics.add.sprite(this.scale.width / 2, this.scale.height * 0.8, 'player_medusa');
+        if (this.hasContinued) {
+            const reviveText = this.add.text(this.scale.width / 2, this.scale.height / 2, '¡VIDA EXTRA!', { ...FONT_STYLE, fontSize: '36px', fill: '#93f300', stroke: '#000', strokeThickness: 6 }).setOrigin(0.5).setDepth(100);
+            this.tweens.add({ targets: reviveText, alpha: 0, duration: 2000, delay: 500 });
+        }
+        const isBonusActive = localStorage.getItem('ascensoZenBonusActive') === 'true';
+        if (isBonusActive) {
+            this.player.setTint(PLAYER_COLORS[Phaser.Math.Between(1, PLAYER_COLORS.length - 1)]);
+            this.scoreMultiplier = 1.2;
+            localStorage.removeItem('ascensoZenBonusActive');
+        } else {
+            this.player.setTint(PLAYER_COLORS[0]);
+            this.scoreMultiplier = 1;
+        }
+        this.player.body.setSize(48, 48).setAllowGravity(false);
+        this.player.setCollideWorldBounds(true).setDepth(10);
+        this.tweens.add({ targets: this.player, scaleX: 1.15, scaleY: 0.85, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        this.anims.create({ key: 'crab_pinch', frames: [ { key: 'obstacle_cangrejo' }, { key: 'cangrejo_cerrado' } ], frameRate: 2, repeat: -1 });
+        this.input.on('pointerdown', () => { this.sound.play('impulse_sfx', { volume: 0.05 }); });
+        if (this.hasContinued) {
+            this.player.setAlpha(0.5);
+            this.time.delayedCall(2000, () => { this.player.setAlpha(1.0); this.physics.add.collider(this.player, this.obstacles, this.gameOver, null, this); });
+        } else {
+            this.physics.add.collider(this.player, this.obstacles, this.gameOver, null, this);
+        }
+        this.physics.add.overlap(this.player, this.fichasGroup, this.collectFicha, null, this);
+        const uiStyle = { ...FONT_STYLE, fontSize: '28px', stroke: '#000', strokeThickness: 5 };
+        this.add.image(35, 35, 'collectible_almeja').setScale(0.8).setDepth(100);
+        this.fichasText = this.add.text(70, 35, `${this.fichas}`, uiStyle).setOrigin(0, 0.5).setDepth(100);
+        this.scoreText = this.add.text(this.scale.width / 2, 35, `0`, { ...uiStyle, fontSize: '36px' }).setOrigin(0.5).setDepth(100);
+        if (this.scoreMultiplier > 1) {
+            const bonusText = this.add.text(this.scoreText.x + this.scoreText.width / 2 + 10, 40, `x${this.scoreMultiplier}`, { ...FONT_STYLE, fontSize: '20px', fill: '#93f300' }).setOrigin(0, 0.5).setDepth(100);
+            this.scoreText.on('updateText', () => { bonusText.x = this.scoreText.x + this.scoreText.width / 2 + 10; });
+        }
+        const trophyIcon = this.add.text(this.scale.width - 50, 35, `🏆`, { fontSize: '28px' }).setOrigin(1, 0.5).setDepth(100);
+        this.highscoreText = this.add.text(trophyIcon.x - trophyIcon.width - 5, 35, `${highscore}`, uiStyle).setOrigin(1, 0.5).setDepth(100);
+        this.scoreTimer = this.time.addEvent({ delay: 100, callback: () => {
+            this.score++;
+            const displayScore = Math.floor(this.score * this.scoreMultiplier);
+            this.scoreText.setText(displayScore);
+            this.scoreText.emit('updateText');
+            if (displayScore > highscore) {
+                this.highscoreText.setText(displayScore);
+                this.highscoreText.setFill('#f3a800');
+            }
+        }, loop: true });
+        this.time.addEvent({ delay: 1500, callback: this.addObstacleRow, callbackScope: this, loop: true });
+        this.time.addEvent({ delay: 3100, callback: this.addFicha, callbackScope: this, loop: true });
+    }
+    update() {
+        this.background.tilePositionY -= 1.0;
+        if (this.input.activePointer.isDown) { this.player.body.velocity.x = 280; } else { this.player.body.velocity.x = -280; }
+    }
+    addObstacleRow() {
+        const gap = 220, position = Phaser.Math.Between(50 + gap / 2, this.scale.width - 50 - gap / 2);
+        for (let x = 48 / 2; x < position - gap / 2; x += 48) { this.createCrab(x, -50); }
+        for (let x = position + gap / 2 + 48 / 2; x < this.scale.width; x += 48) { this.createCrab(x, -50); }
+    }
+    createCrab(x, y) {
+        const crab = this.obstacles.create(x, y, 'obstacle_cangrejo');
+        crab.body.setSize(40, 25);
+        crab.body.velocity.y = 250;
+        crab.setDepth(10);
+        this.time.delayedCall(Phaser.Math.Between(0, 500), () => { if (crab.active) { crab.play('crab_pinch'); } });
+        this.time.delayedCall(5000, () => { if (crab.active) crab.destroy(); });
+    }
+    addFicha() {
+        const ficha = this.fichasGroup.create(Phaser.Math.Between(50, this.scale.width - 50), -50, 'collectible_almeja');
+        ficha.body.velocity.y = 300;
+        ficha.setScale(0.8);
+        this.tweens.add({ targets: ficha, angle: 360, duration: 4000, repeat: -1 });
+        this.time.delayedCall(5000, () => { if (ficha.active) ficha.destroy(); });
+    }
+    collectFicha(player, ficha) {
+        this.sound.play('collect_sfx', { volume: 0.7 });
+        const emitter = this.add.particles(ficha.x, ficha.y, 'particle', { speed: { min: -100, max: 100 }, angle: { min: 0, max: 360 }, scale: { start: 0.1, end: 0 }, blendMode: 'ADD', lifespan: 500, tint: 0xf3a800 });
+        emitter.explode(16);
+        ficha.destroy();
+        this.fichas++;
+        this.fichasText.setText(this.fichas);
+    }
+    gameOver() {
+        if (this.scoreTimer) this.scoreTimer.destroy();
+        this.sound.play('gameover_sfx');
+        this.physics.pause();
+        this.player.setTint(0xff0000);
+        this.cameras.main.shake(300, 0.01);
+        const finalScore = Math.floor(this.score * this.scoreMultiplier);
+        if (finalScore > highscore) { 
+            highscore = finalScore; 
+            localStorage.setItem('ascensoZenHighscore', highscore); 
+        }
+        totalFichas += this.fichas;
+        localStorage.setItem('ascensoZenFichas', totalFichas);
+        if (this.fichas > maxFichasInRun) {
+            const oldCluesCount = Math.floor(maxFichasInRun / 100);
+            const newCluesCount = Math.floor(this.fichas / 100);
+            const newCluesUnlocked = newCluesCount - oldCluesCount;
+            maxFichasInRun = this.fichas;
+            localStorage.setItem('ascensoZenMaxFichas', maxFichasInRun);
+            this.time.delayedCall(1000, () => this.scene.start('GameOverScene', { score: finalScore, fichas: this.fichas, hasContinued: this.hasContinued, newClues: newCluesUnlocked }));
+        } else {
+            this.time.delayedCall(1000, () => this.scene.start('GameOverScene', { score: finalScore, fichas: this.fichas, hasContinued: this.hasContinued, newClues: 0 }));
+        }
+    }
+}
+
+// =================================================================
+// SCENE: SECRET MESSAGE
+// =================================================================
+class SecretScene extends Phaser.Scene {
+    constructor() { super('SecretScene'); }
+    create() {
+        this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
+        this.add.text(this.scale.width / 2, this.scale.height * 0.1, 'El Secreto', { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
+        const unlockedCount = Math.floor(maxFichasInRun / 100);
+        let revealedMessage = '';
+        for (let i = 0; i < SECRET_MESSAGE.length; i++) {
+            revealedMessage += (i < unlockedCount) ? (SECRET_MESSAGE[i] + ' ') : '??? ';
+        }
+        this.add.text(this.scale.width / 2, this.scale.height / 2, revealedMessage, { ...FONT_STYLE, fontSize: '28px', align: 'center', wordWrap: { width: this.scale.width * 0.9 } }).setOrigin(0.5);
+        const backButton = this.add.text(this.scale.width / 2, this.scale.height * 0.9, 'VOLVER', { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
+        backButton.on('pointerdown', () => { this.sound.play('click_sfx'); this.scene.start('MainMenuScene'); });
+    }
+    update() { this.background.tilePositionY -= 0.5; }
+}
+
+// =================================================================
+// SCENE: GAME OVER & CONTINUE (VERSIÓN CORREGIDA Y ROBUSTA)
+// =================================================================
+class GameOverScene extends Phaser.Scene {
+    constructor() { super('GameOverScene'); }
+    init(data) { 
+        this.score = data.score; 
+        this.fichas = data.fichas;
+        this.hasContinued = data.hasContinued; 
+        this.newClues = data.newClues || 0; 
+        this.isAdShowing = false;
+        this.adListeners = []; 
+        this.adLoadingUI = null; // Grupo para los elementos de la UI de carga
+    }
+    
+    create() {
+        this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
+        this.add.text(this.scale.width / 2, this.scale.height * 0.2, 'FIN DE LA PARTIDA', { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height * 0.28, `Puntos: ${this.score}`, FONT_STYLE).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height * 0.35, `Conchas Recolectadas: ${this.fichas}`, FONT_STYLE).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height * 0.42, `Conchas Totales: ${totalFichas}`, FONT_STYLE).setOrigin(0.5);
+
+        if (this.newClues > 0) {
+            this.add.text(this.scale.width / 2, this.scale.height * 0.5, `¡Has revelado ${this.newClues} pista(s) nueva(s)!`, { ...FONT_STYLE, fill: '#93f300' }).setOrigin(0.5);
+        }
+
+        if (!this.hasContinued) this.createContinueOptions();
+        else this.createEndGameButtons();
+    }
+
+    update() { if (!this.isAdShowing) this.background.tilePositionY -= 0.5; }
+    
+    createContinueOptions() {
+        this.continueWithCoinsButton = null;
+        if (totalFichas >= CONTINUE_COST) {
+            this.continueWithCoinsButton = this.add.text(this.scale.width / 2, this.scale.height * 0.6, `1 VIDA EXTRA (${CONTINUE_COST} Conchas)`, { ...FONT_STYLE, fontSize: '22px', backgroundColor: '#004f27', padding: { x: 15, y: 10 } }).setOrigin(0.5).setInteractive();
+            this.continueWithCoinsButton.on('pointerdown', () => { 
+                this.sound.play('click_sfx');
+                totalFichas -= CONTINUE_COST; 
+                localStorage.setItem('ascensoZenFichas', totalFichas); 
+                this.scene.start('GameScene', { score: this.score, fichas: 0, hasContinued: true }); 
+            });
+        }
+        
+        this.adButton = this.add.text(this.scale.width / 2, this.scale.height * 0.75, `1 VIDA EXTRA (Ver Anuncio)`, { ...FONT_STYLE, fontSize: '22px', backgroundColor: '#a88f00', padding: { x: 15, y: 10 } }).setOrigin(0.5).setInteractive();
+        this.adButton.on('pointerdown', () => { 
+            this.sound.play('click_sfx');
+            this.showAdAndContinue();
+        });
+
+        this.endButton = this.add.text(this.scale.width / 2, this.scale.height * 0.9, 'TERMINAR', { ...FONT_STYLE, fontSize: '18px' }).setOrigin(0.5).setInteractive();
+        this.endButton.on('pointerdown', () => { 
+            this.sound.play('click_sfx');
+            if (this.continueWithCoinsButton) this.continueWithCoinsButton.destroy();
+            this.adButton.destroy();
+            this.endButton.destroy();
+            this.createEndGameButtons();
+        });
+    }
+
+    createEndGameButtons() {
+        this.add.text(this.scale.width / 2, this.scale.height * 0.55, `Máximo: ${highscore}`, { ...FONT_STYLE, fill: '#f3a800' }).setOrigin(0.5);
+        const menuButton = this.add.text(this.scale.width / 2, this.scale.height * 0.68, 'MENÚ PRINCIPAL', { ...FONT_STYLE, fontSize: '28px', backgroundColor: '#3d006b', padding: { x: 15, y: 10 } }).setOrigin(0.5).setInteractive();
+        menuButton.on('pointerdown', () => { this.sound.play('click_sfx'); this.scene.start('MainMenuScene'); });
+        
+        const rewardCost = 100;
+        const rewardButton = this.add.text(this.scale.width / 2, this.scale.height * 0.82, `Bonus x1.2 Próxima Partida (${rewardCost} Conchas)`, { ...FONT_STYLE, fontSize: '18px', align: 'center', backgroundColor: '#004f27', padding: { x: 10, y: 5 } }).setOrigin(0.5);
+        if (totalFichas >= rewardCost) {
+            rewardButton.setInteractive().on('pointerdown', () => { 
+                this.sound.play('click_sfx');
+                totalFichas -= rewardCost; 
+                localStorage.setItem('ascensoZenFichas', totalFichas);
+                localStorage.setItem('ascensoZenBonusActive', 'true');
+                rewardButton.setText('¡Bonus Activado!').disableInteractive().setStyle({ backgroundColor: '#333' }); 
+            });
+        } else { 
+            rewardButton.setText(`Bonus x1.2 (Necesitas ${rewardCost})`).setAlpha(0.5); 
+        }
+    }
+
+    // --- Interfaz de Carga de Anuncio ---
+    showAdLoadingUI(onCancel) {
+        this.adLoadingUI = this.add.group();
+        
+        const overlay = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.7).setOrigin(0,0);
+        overlay.setInteractive(); // Bloquea los clics a lo que esté debajo
+        
+        const loadingText = this.add.text(this.scale.width / 2, this.scale.height / 2 - 50, 'Cargando anuncio...', FONT_STYLE).setOrigin(0.5);
+        
+        const cancelButton = this.add.text(this.scale.width / 2, this.scale.height / 2 + 50, 'CANCELAR', { ...FONT_STYLE, fontSize: '22px', backgroundColor: '#8b0000', padding: { x: 15, y: 10 } }).setOrigin(0.5);
+        cancelButton.setInteractive().on('pointerdown', onCancel);
+
+        this.adLoadingUI.addMultiple([overlay, loadingText, cancelButton]);
+        this.adLoadingUI.setDepth(200); // Asegura que esté por encima de todo
+    }
+
+    hideAdLoadingUI() {
+        if (this.adLoadingUI) {
+            this.adLoadingUI.destroy(true); // El 'true' destruye también a los hijos del grupo
+            this.adLoadingUI = null;
+        }
+    }
+
+    // --- LÓGICA DE ADMOB MEJORADA Y A PRUEBA DE FALLOS ---
+    async showAdAndContinue() {
+        if (this.isAdShowing) { return; }
+        
+        if (!adMobInitialized) {
+            console.error("AdMob no está listo.");
+            const errorText = this.add.text(this.scale.width / 2, this.adButton.y + 60, 'Publicidad no disponible ahora.', { ...FONT_STYLE, fontSize: '16px', fill: '#ff6961' }).setOrigin(0.5);
+            this.time.delayedCall(3000, () => errorText.destroy());
+            return;
+        }
+
+        this.isAdShowing = true;
+        
+        const { AdMob } = Capacitor.Plugins;
+        const adId = 'ca-app-pub-2165332859919251/3961845289'; // ID de prueba oficial de Google
+        let isHandled = false;
+
+        const cleanupAndResume = (reason = "Razón desconocida") => {
+            if (isHandled) return;
+            isHandled = true;
+            
+            console.log(`[AdManager] Limpiando y reanudando escena. Razón: ${reason}`);
+            
+            if (adTimeout && adTimeout.remove) adTimeout.remove();
+            this.cleanupListeners();
+            this.hideAdLoadingUI();
+            this.isAdShowing = false;
+        };
+
+        // --- Timeout de 15 segundos ---
+        const adTimeout = this.time.delayedCall(15000, () => cleanupAndResume("Timeout de 15s alcanzado"));
+        
+        // --- Mostrar UI de carga con botón de cancelar ---
+        this.showAdLoadingUI(() => cleanupAndResume("Usuario canceló manualmente"));
+
+        // --- Listeners de AdMob (como fallback) ---
+        const dismissHandler = AdMob.addListener('admob:rewardedVideoAdDismissed', () => cleanupAndResume("Anuncio cerrado por el usuario"));
+        const failShowHandler = AdMob.addListener('admob:rewardedVideoAdFailedToShow', (error) => cleanupAndResume(`Fallo al mostrar anuncio: ${JSON.stringify(error)}`));
+        this.adListeners.push(dismissHandler, failShowHandler);
+
+        try {
+            console.log("Intentando preparar el anuncio recompensado...");
+            await AdMob.prepareRewardVideoAd({ adId, isTesting: false });
+            
+            console.log("Anuncio preparado, intentando mostrar...");
+            const rewardResult = await AdMob.showRewardVideoAd();
+            
+            if (isHandled) return; // Si ya se manejó (ej: por timeout), no hacer nada
+            
+            if (rewardResult && rewardResult.amount > 0) {
+                console.log('RECOMPENSA OBTENIDA', rewardResult);
+                isHandled = true;
+                adTimeout.remove();
+                this.cleanupListeners();
+                this.hideAdLoadingUI();
+                this.scene.start('GameScene', { score: this.score, fichas: 0, hasContinued: true });
+            } else {
+                cleanupAndResume("Anuncio visto pero sin recompensa");
+            }
+        } catch (e) {
+            console.error("ERROR CATASTRÓFICO en el flujo del anuncio:", e);
+            cleanupAndResume(`Excepción en try/catch: ${e.message}`);
+        }
+    }
+    
+    cleanupListeners() {
+        console.log("Limpiando listeners de AdMob específicos de la escena...");
+        this.adListeners.forEach(listener => listener.remove());
+        this.adListeners = [];
+    }
+}
+
+// =================================================================
+// GAME INITIALIZATION
+// =================================================================
+const config = {
+    type: Phaser.AUTO,
+    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: 450, height: 800 },
+    physics: { default: 'arcade', arcade: { debug: false } },
+    scene: [PreloaderScene, MainMenuScene, GameScene, SecretScene, GameOverScene],
+    backgroundColor: '#0d0014'
+};
+
+const game = new Phaser.Game(config);
