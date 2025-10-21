@@ -10,6 +10,47 @@ let totalFichas = parseInt(localStorage.getItem('ascensoZenFichas') || '0');
 let music;
 let adMobInitialized = false; // Flag para controlar la inicialización de AdMob
 
+// --- ✅ MODIFICADO: Configuración de Volumen ---
+const MUSIC_VOLUME_LEVELS = { OFF: 0.0, BAJO: 0.03, NORMAL: 0.06 };
+const SFX_VOLUME_LEVELS = { OFF: 0.0, BAJO: 0.25, NORMAL: 0.5 };
+let musicVolume = parseFloat(localStorage.getItem('ascensoZenMusicVolume') || MUSIC_VOLUME_LEVELS.NORMAL);
+let sfxVolume = parseFloat(localStorage.getItem('ascensoZenSfxVolume') || SFX_VOLUME_LEVELS.NORMAL);
+// --- FIN MODIFICADO ---
+
+// --- ✅ NUEVO: Helper para SFX ---
+/**
+ * Reproduce un efecto de sonido respetando el volumen global de SFX.
+ * @param {Phaser.Scene} scene - La escena que llama al sonido.
+ * @param {string} key - El nombre del asset de audio.
+ * @param {object} [config] - Configuración adicional de Phaser para el sonido (ej. { volume: 0.5 }).
+ */
+function playSfx(scene, key, config = {}) {
+    if (sfxVolume > 0) {
+        // Multiplica el volumen base del efecto (si se define) por el volumen global de SFX
+        let effectiveVolume = (config.volume || 1.0) * sfxVolume;
+        scene.sound.play(key, { ...config, volume: effectiveVolume });
+    }
+}
+// --- FIN NUEVO ---
+
+// --- ✅ NUEVO: Handlers de Pausa/Reanudación de App ---
+function onAppPause() {
+    console.log("App pausada, pausando música.");
+    if (music && music.isPlaying) {
+        music.pause();
+    }
+}
+
+function onAppResume() {
+    console.log("App reanudada, reanudando música si el volumen está activo.");
+    // Solo reanuda si la música existe, no está sonando ya, y el volumen no es CERO
+    if (music && !music.isPlaying && musicVolume > 0) {
+        music.resume();
+    }
+}
+// --- FIN NUEVO ---
+
+
 // =================================================================
 // SECRET MESSAGE SYSTEM
 // =================================================================
@@ -34,7 +75,7 @@ const SECRET_MESSAGE = [
 let maxFichasInRun = parseInt(localStorage.getItem('ascensoZenMaxFichas') || '0');
 
 // =================================================================
-// ADMOB INITIALIZATION & MASTER LISTENER
+// ADMOB INITIALIZATION & MASTER LISTENER (MODIFICADO)
 // =================================================================
 document.addEventListener('deviceready', async () => {
     const { AdMob } = Capacitor.Plugins;
@@ -82,19 +123,43 @@ document.addEventListener('deviceready', async () => {
     } catch (e) {
         console.error("❌ Error al inicializar AdMob:", e);
     }
+
+    // --- ✅ NUEVO: Manejo de Pausa/Reanudación de la App ---
+    console.log("🔧 Instalando listeners de ciclo de vida (pause, resume)...");
+    document.addEventListener('pause', onAppPause, false);
+    document.addEventListener('resume', onAppResume, false);
+    console.log("✅ Listeners de ciclo de vida instalados.");
+    // --- FIN NUEVO ---
+
 }, false);
 
 
 // =================================================================
-// SCENE: PRELOADER
+// SCENE: PRELOADER (MODIFICADA)
 // =================================================================
 class PreloaderScene extends Phaser.Scene {
     constructor() { super('PreloaderScene'); }
     preload() {
         const progressBar = this.add.graphics(), progressBox = this.add.graphics();
         progressBox.fillStyle(0x222222, 0.8).fillRect(this.scale.width / 2 - 160, this.scale.height / 2 - 30, 320, 50);
+        
+        // --- ✅ MODIFICADO: Iniciar música al completar la carga ---
         this.load.on('progress', v => { progressBar.clear().fillStyle(0xffffff, 1).fillRect(this.scale.width / 2 - 150, this.scale.height / 2 - 20, 300 * v, 30); });
-        this.load.on('complete', () => { progressBar.destroy(); progressBox.destroy(); this.scene.start('MainMenuScene'); });
+        this.load.on('complete', () => { 
+            progressBar.destroy(); 
+            progressBox.destroy(); 
+            
+            // Iniciar la música aquí, una vez cargada, con el volumen guardado
+            if (!music) {
+                music = this.sound.add('music', { loop: true, volume: musicVolume });
+                if (musicVolume > 0) {
+                    music.play();
+                }
+            }
+            
+            this.scene.start('MainMenuScene'); 
+        });
+        // --- FIN MODIFICADO ---
 
         this.load.image('background_vertical', 'assets/background_vertical.png');
         this.load.image('player_medusa', 'assets/medusa.png');
@@ -111,7 +176,7 @@ class PreloaderScene extends Phaser.Scene {
 }
 
 // =================================================================
-// SCENE: MAIN MENU
+// SCENE: MAIN MENU (MODIFICADA)
 // =================================================================
 class MainMenuScene extends Phaser.Scene {
     constructor() { super('MainMenuScene'); }
@@ -119,29 +184,142 @@ class MainMenuScene extends Phaser.Scene {
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
         highscore = localStorage.getItem('ascensoZenHighscore') || 0;
         totalFichas = parseInt(localStorage.getItem('ascensoZenFichas') || '0');
+        
+        // Título
         const title = this.add.text(this.scale.width / 2, this.scale.height * 0.2, 'Ascenso Zen', { fontFamily: 'Impact, "Arial Black", sans-serif', fontSize: '80px', stroke: '#001a33', strokeThickness: 8, shadow: { offsetX: 5, offsetY: 5, color: '#000000', blur: 8, stroke: true, fill: true } }).setOrigin(0.5);
         const gradient = title.context.createLinearGradient(0, 0, 0, title.height);
         gradient.addColorStop(0, '#87CEEB'); gradient.addColorStop(1, '#00BFFF');
         title.setFill(gradient);
+
+        // --- ✅ MODIFICADO: Botones de Menú ---
+
+        // Botón Jugar
         const playButton = this.add.text(this.scale.width / 2, this.scale.height * 0.45, 'JUGAR', { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
         playButton.on('pointerdown', () => {
-            if (!music || !music.isPlaying) {
-                music = this.sound.add('music', { loop: true, volume: 0.4 });
-                music.play();
-            }
-            this.sound.play('click_sfx');
+            playSfx(this, 'click_sfx');
             this.scene.start('GameScene', { score: 0, fichas: 0, hasContinued: false });
         });
-        const secretButton = this.add.text(this.scale.width / 2, this.scale.height * 0.60, 'VER SECRETO', { ...FONT_STYLE, fontSize: '26px', backgroundColor: '#a88f00', padding: { x: 15, y: 8 } }).setOrigin(0.5).setInteractive();
-        secretButton.on('pointerdown', () => { this.sound.play('click_sfx'); this.scene.start('SecretScene'); });
+
+        // Botón Secreto
+        const secretButton = this.add.text(this.scale.width / 2, this.scale.height * 0.57, 'VER SECRETO', { ...FONT_STYLE, fontSize: '26px', backgroundColor: '#a88f00', padding: { x: 15, y: 8 } }).setOrigin(0.5).setInteractive();
+        secretButton.on('pointerdown', () => { 
+            playSfx(this, 'click_sfx');
+            this.scene.start('SecretScene'); 
+        });
+
+        // Botón Opciones (NUEVO)
+        const optionsButton = this.add.text(this.scale.width / 2, this.scale.height * 0.69, 'OPCIONES', { ...FONT_STYLE, fontSize: '26px', backgroundColor: '#4a4a4a', padding: { x: 15, y: 8 } }).setOrigin(0.5).setInteractive();
+        optionsButton.on('pointerdown', () => { 
+            playSfx(this, 'click_sfx');
+            this.scene.start('OptionsScene'); 
+        });
+
+        // --- FIN MODIFICADO ---
+
+        // Textos de puntuación
         this.add.text(this.scale.width / 2, this.scale.height - 100, `MÁXIMA PUNTUACIÓN: ${highscore}`, FONT_STYLE).setOrigin(0.5);
         this.add.text(this.scale.width / 2, this.scale.height - 50, `CONCHAS TOTALES: ${totalFichas}`, FONT_STYLE).setOrigin(0.5);
     }
+
     update() { this.background.tilePositionY -= 0.5; }
 }
 
 // =================================================================
-// SCENE: GAME
+// SCENE: OPTIONS (NUEVA)
+// =================================================================
+class OptionsScene extends Phaser.Scene {
+    constructor() { super('OptionsScene'); }
+    
+    create() {
+        this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
+        this.add.text(this.scale.width / 2, this.scale.height * 0.15, 'Opciones', { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
+
+        const buttonStyle = { ...FONT_STYLE, fontSize: '20px', padding: { x: 10, y: 5 } };
+        const buttonSpacing = 120;
+
+        // --- Controles de Música ---
+        this.add.text(this.scale.width / 2, this.scale.height * 0.30, 'Música:', FONT_STYLE).setOrigin(0.5);
+        const musicButtonY = this.scale.height * 0.37;
+        
+        this.musicButtonOff = this.add.text(this.scale.width / 2 - buttonSpacing, musicButtonY, 'OFF', { ...buttonStyle, backgroundColor: '#8b0000' }).setOrigin(0.5).setInteractive();
+        this.musicButtonLow = this.add.text(this.scale.width / 2, musicButtonY, 'BAJO', { ...buttonStyle, backgroundColor: '#a88f00' }).setOrigin(0.5).setInteractive();
+        this.musicButtonNormal = this.add.text(this.scale.width / 2 + buttonSpacing, musicButtonY, 'NORMAL', { ...buttonStyle, backgroundColor: '#004f27' }).setOrigin(0.5).setInteractive();
+
+        this.musicButtonOff.on('pointerdown', () => this.updateMusicVolume(MUSIC_VOLUME_LEVELS.OFF));
+        this.musicButtonLow.on('pointerdown', () => this.updateMusicVolume(MUSIC_VOLUME_LEVELS.BAJO));
+        this.musicButtonNormal.on('pointerdown', () => this.updateMusicVolume(MUSIC_VOLUME_LEVELS.NORMAL));
+
+        // --- Controles de Efectos (SFX) ---
+        this.add.text(this.scale.width / 2, this.scale.height * 0.50, 'Efectos:', FONT_STYLE).setOrigin(0.5);
+        const sfxButtonY = this.scale.height * 0.57;
+
+        this.sfxButtonOff = this.add.text(this.scale.width / 2 - buttonSpacing, sfxButtonY, 'OFF', { ...buttonStyle, backgroundColor: '#8b0000' }).setOrigin(0.5).setInteractive();
+        this.sfxButtonLow = this.add.text(this.scale.width / 2, sfxButtonY, 'BAJO', { ...buttonStyle, backgroundColor: '#a88f00' }).setOrigin(0.5).setInteractive();
+        this.sfxButtonNormal = this.add.text(this.scale.width / 2 + buttonSpacing, sfxButtonY, 'NORMAL', { ...buttonStyle, backgroundColor: '#004f27' }).setOrigin(0.5).setInteractive();
+
+        this.sfxButtonOff.on('pointerdown', () => this.updateSfxVolume(SFX_VOLUME_LEVELS.OFF));
+        this.sfxButtonLow.on('pointerdown', () => this.updateSfxVolume(SFX_VOLUME_LEVELS.BAJO));
+        this.sfxButtonNormal.on('pointerdown', () => this.updateSfxVolume(SFX_VOLUME_LEVELS.NORMAL));
+
+        // --- Botón Volver ---
+        const backButton = this.add.text(this.scale.width / 2, this.scale.height * 0.85, 'VOLVER', { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
+        backButton.on('pointerdown', () => { 
+            playSfx(this, 'click_sfx');
+            this.scene.start('MainMenuScene'); 
+        });
+
+        this.updateVolumeHighlights(); // Marcar botones activos al inicio
+    }
+
+    updateMusicVolume(newVolume) {
+        playSfx(this, 'click_sfx');
+        musicVolume = newVolume;
+        localStorage.setItem('ascensoZenMusicVolume', musicVolume.toString());
+
+        if (music) {
+            music.setVolume(musicVolume);
+            if (musicVolume > 0 && !music.isPlaying) {
+                music.play();
+            } else if (musicVolume === 0 && music.isPlaying) {
+                music.stop();
+            }
+        }
+        this.updateVolumeHighlights();
+    }
+
+    updateSfxVolume(newVolume) {
+        sfxVolume = newVolume;
+        localStorage.setItem('ascensoZenSfxVolume', sfxVolume.toString());
+        playSfx(this, 'click_sfx'); // Reproduce con el *nuevo* volumen
+        this.updateVolumeHighlights();
+    }
+
+    updateVolumeHighlights() {
+        // Resetea música
+        this.musicButtonOff.setAlpha(0.6);
+        this.musicButtonLow.setAlpha(0.6);
+        this.musicButtonNormal.setAlpha(0.6);
+        // Destaca música
+        if (musicVolume === MUSIC_VOLUME_LEVELS.OFF) this.musicButtonOff.setAlpha(1.0);
+        else if (musicVolume === MUSIC_VOLUME_LEVELS.BAJO) this.musicButtonLow.setAlpha(1.0);
+        else if (musicVolume === MUSIC_VOLUME_LEVELS.NORMAL) this.musicButtonNormal.setAlpha(1.0);
+
+        // Resetea SFX
+        this.sfxButtonOff.setAlpha(0.6);
+        this.sfxButtonLow.setAlpha(0.6);
+        this.sfxButtonNormal.setAlpha(0.6);
+        // Destaca SFX
+        if (sfxVolume === SFX_VOLUME_LEVELS.OFF) this.sfxButtonOff.setAlpha(1.0);
+        else if (sfxVolume === SFX_VOLUME_LEVELS.BAJO) this.sfxButtonLow.setAlpha(1.0);
+        else if (sfxVolume === SFX_VOLUME_LEVELS.NORMAL) this.sfxButtonNormal.setAlpha(1.0);
+    }
+    
+    update() { this.background.tilePositionY -= 0.5; }
+}
+// --- FIN NUEVA ESCENA ---
+
+// =================================================================
+// SCENE: GAME (MODIFICADA)
 // =================================================================
 class GameScene extends Phaser.Scene {
     constructor() { super('GameScene'); }
@@ -173,7 +351,13 @@ class GameScene extends Phaser.Scene {
         this.player.setCollideWorldBounds(true).setDepth(10);
         this.tweens.add({ targets: this.player, scaleX: 1.15, scaleY: 0.85, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
         this.anims.create({ key: 'crab_pinch', frames: [ { key: 'obstacle_cangrejo' }, { key: 'cangrejo_cerrado' } ], frameRate: 2, repeat: -1 });
-        this.input.on('pointerdown', () => { this.sound.play('impulse_sfx', { volume: 0.05 }); });
+        
+        // --- ✅ MODIFICADO: usa playSfx ---
+        this.input.on('pointerdown', () => { 
+            playSfx(this, 'impulse_sfx', { volume: 0.05 }); 
+        });
+        // --- FIN MODIFICADO ---
+
         if (this.hasContinued) {
             this.player.setAlpha(0.5);
             this.time.delayedCall(2000, () => { this.player.setAlpha(1.0); this.physics.add.collider(this.player, this.obstacles, this.gameOver, null, this); });
@@ -229,7 +413,10 @@ class GameScene extends Phaser.Scene {
         this.time.delayedCall(5000, () => { if (ficha.active) ficha.destroy(); });
     }
     collectFicha(player, ficha) {
-        this.sound.play('collect_sfx', { volume: 0.7 });
+        // --- ✅ MODIFICADO: usa playSfx ---
+        playSfx(this, 'collect_sfx', { volume: 0.7 });
+        // --- FIN MODIFICADO ---
+        
         const emitter = this.add.particles(ficha.x, ficha.y, 'particle', { speed: { min: -100, max: 100 }, angle: { min: 0, max: 360 }, scale: { start: 0.1, end: 0 }, blendMode: 'ADD', lifespan: 500, tint: 0xf3a800 });
         emitter.explode(16);
         ficha.destroy();
@@ -238,7 +425,11 @@ class GameScene extends Phaser.Scene {
     }
     gameOver() {
         if (this.scoreTimer) this.scoreTimer.destroy();
-        this.sound.play('gameover_sfx');
+        
+        // --- ✅ MODIFICADO: usa playSfx ---
+        playSfx(this, 'gameover_sfx');
+        // --- FIN MODIFICADO ---
+
         this.physics.pause();
         this.player.setTint(0xff0000);
         this.cameras.main.shake(300, 0.01);
@@ -263,7 +454,7 @@ class GameScene extends Phaser.Scene {
 }
 
 // =================================================================
-// SCENE: SECRET MESSAGE
+// SCENE: SECRET MESSAGE (MODIFICADA)
 // =================================================================
 class SecretScene extends Phaser.Scene {
     constructor() { super('SecretScene'); }
@@ -277,13 +468,19 @@ class SecretScene extends Phaser.Scene {
         }
         this.add.text(this.scale.width / 2, this.scale.height / 2, revealedMessage, { ...FONT_STYLE, fontSize: '28px', align: 'center', wordWrap: { width: this.scale.width * 0.9 } }).setOrigin(0.5);
         const backButton = this.add.text(this.scale.width / 2, this.scale.height * 0.9, 'VOLVER', { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
-        backButton.on('pointerdown', () => { this.sound.play('click_sfx'); this.scene.start('MainMenuScene'); });
+        
+        // --- ✅ MODIFICADO: usa playSfx ---
+        backButton.on('pointerdown', () => { 
+            playSfx(this, 'click_sfx');
+            this.scene.start('MainMenuScene'); 
+        });
+        // --- FIN MODIFICADO ---
     }
     update() { this.background.tilePositionY -= 0.5; }
 }
 
 // =================================================================
-// SCENE: GAME OVER & CONTINUE (VERSIÓN CORREGIDA Y ROBUSTA)
+// SCENE: GAME OVER & CONTINUE (MODIFICADA)
 // =================================================================
 class GameOverScene extends Phaser.Scene {
     constructor() { super('GameOverScene'); }
@@ -318,8 +515,9 @@ class GameOverScene extends Phaser.Scene {
         this.continueWithCoinsButton = null;
         if (totalFichas >= CONTINUE_COST) {
             this.continueWithCoinsButton = this.add.text(this.scale.width / 2, this.scale.height * 0.6, `1 VIDA EXTRA (${CONTINUE_COST} Conchas)`, { ...FONT_STYLE, fontSize: '22px', backgroundColor: '#004f27', padding: { x: 15, y: 10 } }).setOrigin(0.5).setInteractive();
+            // --- ✅ MODIFICADO: usa playSfx ---
             this.continueWithCoinsButton.on('pointerdown', () => { 
-                this.sound.play('click_sfx');
+                playSfx(this, 'click_sfx');
                 totalFichas -= CONTINUE_COST; 
                 localStorage.setItem('ascensoZenFichas', totalFichas); 
                 this.scene.start('GameScene', { score: this.score, fichas: 0, hasContinued: true }); 
@@ -327,14 +525,16 @@ class GameOverScene extends Phaser.Scene {
         }
         
         this.adButton = this.add.text(this.scale.width / 2, this.scale.height * 0.75, `1 VIDA EXTRA (Ver Anuncio)`, { ...FONT_STYLE, fontSize: '22px', backgroundColor: '#a88f00', padding: { x: 15, y: 10 } }).setOrigin(0.5).setInteractive();
+        // --- ✅ MODIFICADO: usa playSfx ---
         this.adButton.on('pointerdown', () => { 
-            this.sound.play('click_sfx');
+            playSfx(this, 'click_sfx');
             this.showAdAndContinue();
         });
 
         this.endButton = this.add.text(this.scale.width / 2, this.scale.height * 0.9, 'TERMINAR', { ...FONT_STYLE, fontSize: '18px' }).setOrigin(0.5).setInteractive();
+        // --- ✅ MODIFICADO: usa playSfx ---
         this.endButton.on('pointerdown', () => { 
-            this.sound.play('click_sfx');
+            playSfx(this, 'click_sfx');
             if (this.continueWithCoinsButton) this.continueWithCoinsButton.destroy();
             this.adButton.destroy();
             this.endButton.destroy();
@@ -345,13 +545,18 @@ class GameOverScene extends Phaser.Scene {
     createEndGameButtons() {
         this.add.text(this.scale.width / 2, this.scale.height * 0.55, `Máximo: ${highscore}`, { ...FONT_STYLE, fill: '#f3a800' }).setOrigin(0.5);
         const menuButton = this.add.text(this.scale.width / 2, this.scale.height * 0.68, 'MENÚ PRINCIPAL', { ...FONT_STYLE, fontSize: '28px', backgroundColor: '#3d006b', padding: { x: 15, y: 10 } }).setOrigin(0.5).setInteractive();
-        menuButton.on('pointerdown', () => { this.sound.play('click_sfx'); this.scene.start('MainMenuScene'); });
+        // --- ✅ MODIFICADO: usa playSfx ---
+        menuButton.on('pointerdown', () => { 
+            playSfx(this, 'click_sfx');
+            this.scene.start('MainMenuScene'); 
+        });
         
         const rewardCost = 100;
         const rewardButton = this.add.text(this.scale.width / 2, this.scale.height * 0.82, `Bonus x1.2 Próxima Partida (${rewardCost} Conchas)`, { ...FONT_STYLE, fontSize: '18px', align: 'center', backgroundColor: '#004f27', padding: { x: 10, y: 5 } }).setOrigin(0.5);
         if (totalFichas >= rewardCost) {
+            // --- ✅ MODIFICADO: usa playSfx ---
             rewardButton.setInteractive().on('pointerdown', () => { 
-                this.sound.play('click_sfx');
+                playSfx(this, 'click_sfx');
                 totalFichas -= rewardCost; 
                 localStorage.setItem('ascensoZenFichas', totalFichas);
                 localStorage.setItem('ascensoZenBonusActive', 'true');
@@ -464,7 +669,8 @@ const config = {
     type: Phaser.AUTO,
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: 450, height: 800 },
     physics: { default: 'arcade', arcade: { debug: false } },
-    scene: [PreloaderScene, MainMenuScene, GameScene, SecretScene, GameOverScene],
+    // --- ✅ MODIFICADO: Añadida OptionsScene ---
+    scene: [PreloaderScene, MainMenuScene, OptionsScene, GameScene, SecretScene, GameOverScene],
     backgroundColor: '#0d0014'
 };
 
