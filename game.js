@@ -1,7 +1,7 @@
 // =================================================================
 // GAME CONFIGURATION
 // =================================================================
-console.log("Juego Versión 3.3 - Master Listener de AdMob Activado");
+console.log("Juego Versión 1.2");
 const FONT_STYLE = { fontFamily: '"Trebuchet MS", Arial, sans-serif', fontSize: '24px', fill: '#ffffff' };
 const CONTINUE_COST = 30;
 // --- ✅ MODIFICADO: De Colores a Skins (Imágenes) ---
