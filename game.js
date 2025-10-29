@@ -1,8 +1,226 @@
 // =================================================================
+// LANGUAGE SYSTEM
+// =================================================================
+const allStrings = {
+    'es': {
+        // MainMenuScene
+        'gameTitle': 'Ascenso Zen',
+        'playButton': 'JUGAR',
+        'secretButton': 'VER SECRETO',
+        'storeButton': 'TIENDA',
+        'optionsButton': 'OPCIONES',
+        'highScoreLabel': 'MÁXIMA PUNTUACIÓN: ',
+        'totalShellsLabel': 'CONCHAS TOTALES: ',
+
+        // OptionsScene
+        'optionsTitle': 'Opciones',
+        'musicLabel': 'Música:',
+        'sfxLabel': 'Efectos:',
+        'volumeOff': 'OFF',
+        'volumeLow': 'BAJO',
+        'volumeNormal': 'NORMAL',
+        'backButton': 'VOLVER',
+        'languageLabel': 'Idioma:', // Nuevo
+
+        // StoreScene
+        'storeTitle': 'Tienda',
+        'shellsLabel': 'Conchas: ',
+        'usingLabel': 'USANDO',
+        'selectLabel': 'Elegir',
+
+        // GameScene
+        'extraLife': '¡VIDA EXTRA!',
+
+        // SecretScene
+        'secretTitle': 'El Secreto',
+        'secretMessage': [
+            "La corriente susurra...",
+            "...un secreto.",
+            "Sólo para aquellos...",
+            "...que ascienden.",
+            "En lo más profundo...",
+            "...la luz duerme.",
+            "Y en la superficie...",
+            "...espera.",
+            "El océano no tiene fin,",
+            "ni tampoco principio.",
+            "Sólo el eterno ascenso.",
+            "Sigue nadando,",
+            "sigue soñando.",
+            "La paz se encuentra...",
+            "...en el movimiento.",
+            "ZEN"
+        ],
+
+        // GameOverScene
+        'gameOverTitle': 'FIN DE LA PARTIDA',
+        'scoreLabel': 'Puntos: ',
+        'collectedLabel': 'Conchas Recolectadas: ',
+        'newClues': (n) => `¡Has revelado ${n} pista(s) nueva(s)!`, // Función para plurales
+        'continueCost': (c) => `1 VIDA EXTRA (${c} Conchas)`,
+        'continueAd': '1 VIDA EXTRA (Ver Anuncio)',
+        'endButton': 'TERMINAR',
+        'maxScoreLabel': 'Máximo: ',
+        'menuButton': 'MENÚ PRINCIPAL',
+        'bonusButton': (c) => `Bonus x1.2 Próxima Partida (${c} Conchas)`,
+        'bonusActive': '¡Bonus Activado!',
+        'bonusNeeds': (c) => `Bonus x1.2 (Necesitas ${c})`,
+        'loadingAd': 'Cargando anuncio...',
+        'cancelButton': 'CANCELAR',
+        'adError': 'Publicidad no disponible ahora.'
+    },
+    'en': {
+        // MainMenuScene
+        'gameTitle': 'Zen Ascent',
+        'playButton': 'PLAY',
+        'secretButton': 'VIEW SECRET',
+        'storeButton': 'STORE',
+        'optionsButton': 'OPTIONS',
+        'highScoreLabel': 'HIGH SCORE: ',
+        'totalShellsLabel': 'TOTAL SHELLS: ',
+
+        // OptionsScene
+        'optionsTitle': 'Options',
+        'musicLabel': 'Music:',
+        'sfxLabel': 'Effects:',
+        'volumeOff': 'OFF',
+        'volumeLow': 'LOW',
+        'volumeNormal': 'NORMAL',
+        'backButton': 'BACK',
+        'languageLabel': 'Language:', // Nuevo
+
+        // StoreScene
+        'storeTitle': 'Store',
+        'shellsLabel': 'Shells: ',
+        'usingLabel': 'USING',
+        'selectLabel': 'Select',
+
+        // GameScene
+        'extraLife': 'EXTRA LIFE!',
+
+        // SecretScene
+        'secretTitle': 'The Secret',
+        'secretMessage': [
+            "The current whispers...",
+            "...a secret.",
+            "Only for those...",
+            "...who ascend.",
+            "In the deepest depths...",
+            "...the light sleeps.",
+            "And on the surface...",
+            "...it waits.",
+            "The ocean has no end,",
+            "nor a beginning.",
+            "Only the eternal ascent.",
+            "Keep swimming,",
+            "keep dreaming.",
+            "Peace is found...",
+            "...in movement.",
+            "ZEN"
+        ],
+
+        // GameOverScene
+        'gameOverTitle': 'GAME OVER',
+        'scoreLabel': 'Score: ',
+        'collectedLabel': 'Shells Collected: ',
+        'newClues': (n) => `You revealed ${n} new clue(s)!`,
+        'continueCost': (c) => `1 EXTRA LIFE (${c} Shells)`,
+        'continueAd': '1 EXTRA LIFE (Watch Ad)',
+        'endButton': 'FINISH',
+        'maxScoreLabel': 'Max Score: ',
+        'menuButton': 'MAIN MENU',
+        'bonusButton': (c) => `x1.2 Bonus Next Game (${c} Shells)`,
+        'bonusActive': 'Bonus Activated!',
+        'bonusNeeds': (c) => `x1.2 Bonus (Needs ${c})`,
+        'loadingAd': 'Loading ad...',
+        'cancelButton': 'CANCEL',
+        'adError': 'Ads not available right now.'
+    }
+};
+
+// Variable global para el idioma
+let currentLanguage = localStorage.getItem('ascensoZenLanguage') || (navigator.language.startsWith('es') ? 'es' : 'en');
+
+/**
+ * Obtiene una cadena de texto en el idioma actual.
+ * @param {string} key - La clave de la cadena (ej. 'playButton').
+ * @param {any} [arg] - Un argumento opcional para las funciones (ej. el coste).
+ */
+function getText(key, arg = null) {
+    const langPack = allStrings[currentLanguage];
+    if (!langPack || !langPack[key]) {
+        // Fallback al inglés si no se encuentra la clave
+        const fallbackPack = allStrings['en'];
+        if (!fallbackPack[key]) return `[${key}]`; // Clave no encontrada
+        
+        return (typeof fallbackPack[key] === 'function') ? fallbackPack[key](arg) : fallbackPack[key];
+    }
+    
+    const textOrFn = langPack[key];
+    return (typeof textOrFn === 'function') ? textOrFn(arg) : textOrFn;
+}
+
+// --- ✅ NUEVO: Transición de escena ---
+/**
+ * Aplica un fundido de salida y luego cambia la escena.
+ * @param {Phaser.Scene} scene - La escena actual (this).
+ * @param {string} targetScene - El nombre de la escena a la que cambiar.
+ * @param {object} [data={}] - Datos para pasar a la siguiente escena.
+ */
+function changeScene(scene, targetScene, data = {}) {
+    // --- ✅ MODIFICADO: Transición a 250ms ---
+    scene.cameras.main.fadeOut(250, 0, 0, 0); 
+    scene.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+        scene.scene.start(targetScene, data);
+    });
+}
+
+/**
+ * Aplica los efectos de bamboleo y hover a un botón.
+ * @param {Phaser.Scene} scene - La escena actual (this).
+ * @param {Phaser.GameObjects.Text} button - El objeto de texto del botón.
+ * @param {Function} [onClickCallback] - La función a ejecutar *después* de la animación de clic.
+ */
+function applyButtonTweens(scene, button, onClickCallback) {
+    button.on('pointerover', () => button.setAlpha(0.8));
+    button.on('pointerout', () => button.setAlpha(1.0));
+    
+    // Si no hay callback, solo reproduce sonido y anima
+    if (!onClickCallback) {
+        button.on('pointerdown', () => {
+            playSfx(scene, 'click_sfx');
+            scene.tweens.add({ targets: button, scale: 0.9, duration: 100, yoyo: true, ease: 'Quad.easeOut' });
+        });
+        return;
+    }
+
+    // Si hay callback, espera a que termine la animación
+    button.on('pointerdown', () => {
+        playSfx(scene, 'click_sfx');
+        scene.tweens.add({ 
+            targets: button, 
+            scale: 0.9, 
+            duration: 100, 
+            yoyo: true, 
+            ease: 'Quad.easeOut',
+            onComplete: () => {
+                // Restaura la escala por si acaso
+                button.setScale(1.0);
+                // Ejecuta la acción (como cambiar de escena)
+                onClickCallback();
+            }
+        });
+    });
+}
+// --- FIN NUEVO ---
+
+
+// =================================================================
 // GAME CONFIGURATION
 // =================================================================
 console.log("Juego Versión 1.2");
-const FONT_STYLE = { fontFamily: '"Trebuchet MS", Arial, sans-serif', fontSize: '24px', fill: '#ffffff' };
+// --- ✅ MODIFICADO: Fuente cambiada a 'Gill Sans' ---
+const FONT_STYLE = { fontFamily: '"Gill Sans", "Trebuchet MS", Arial, sans-serif', fontSize: '24px', fill: '#ffffff' };
 const CONTINUE_COST = 30;
 // --- ✅ MODIFICADO: De Colores a Skins (Imágenes) ---
 const PLAYER_SKINS = ['player_medusa', 'medusaVerde', 'medusaOro']; 
@@ -66,24 +284,10 @@ function onAppResume() {
 // =================================================================
 // SECRET MESSAGE SYSTEM
 // =================================================================
-const SECRET_MESSAGE = [
-    "La corriente susurra...",
-    "...un secreto.",
-    "Sólo para aquellos...",
-    "...que ascienden.",
-    "En lo más profundo...",
-    "...la luz duerme.",
-    "Y en la superficie...",
-    "...espera.",
-    "El océano no tiene fin,",
-    "ni tampoco principio.",
-    "Sólo el eterno ascenso.",
-    "Sigue nadando,",
-    "sigue soñando.",
-    "La paz se encuentra...",
-    "...en el movimiento.",
-    "ZEN"
-];
+// --- MODIFICADO: Carga dinámica del idioma ---
+// const SECRET_MESSAGE = [ ... ] 
+// (El array original se ha movido a 'allStrings')
+// --- FIN MODIFICADO ---
 let maxFichasInRun = parseInt(localStorage.getItem('ascensoZenMaxFichas') || '0');
 
 // =================================================================
@@ -199,106 +403,125 @@ class PreloaderScene extends Phaser.Scene {
 class MainMenuScene extends Phaser.Scene {
     constructor() { super('MainMenuScene'); }
     create() {
+        // --- ✅ MODIFICADO: FADE IN más rápido ---
+        this.cameras.main.fadeIn(250, 0, 0, 0);
+        // --- FIN MODIFICADO ---
+
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
         highscore = localStorage.getItem('ascensoZenHighscore') || 0;
         totalFichas = parseInt(localStorage.getItem('ascensoZenFichas') || '0');
         
-        // Título
-        const title = this.add.text(this.scale.width / 2, this.scale.height * 0.2, 'Ascenso Zen', { fontFamily: 'Impact, "Arial Black", sans-serif', fontSize: '80px', stroke: '#001a33', strokeThickness: 8, shadow: { offsetX: 5, offsetY: 5, color: '#000000', blur: 8, stroke: true, fill: true } }).setOrigin(0.5);
+        // --- ✅ MODIFICADO: Título (Fuente y Tamaño) ---
+        const title = this.add.text(this.scale.width / 2, this.scale.height * 0.2, getText('gameTitle'), { fontFamily: '"Gill Sans", Impact, "Arial Black", sans-serif', fontSize: '72px', stroke: '#001a33', strokeThickness: 8, shadow: { offsetX: 5, offsetY: 5, color: '#000000', blur: 8, stroke: true, fill: true } }).setOrigin(0.5);
         const gradient = title.context.createLinearGradient(0, 0, 0, title.height);
         gradient.addColorStop(0, '#87CEEB'); gradient.addColorStop(1, '#00BFFF');
         title.setFill(gradient);
+        // --- FIN MODIFICADO ---
 
         // --- ✅ MODIFICADO: Botones de Menú (Reajustados) ---
-        const buttonYStart = this.scale.height * 0.40;
-        const buttonSpacing = this.scale.height * 0.11;
+        const buttonYStart = this.scale.height * 0.38; // Subido (antes 0.40)
+        const buttonSpacing = this.scale.height * 0.10; // Más junto (antes 0.11)
 
-        // Botón Jugar
-        const playButton = this.add.text(this.scale.width / 2, buttonYStart, 'JUGAR', { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
-        playButton.on('pointerdown', () => {
-            playSfx(this, 'click_sfx');
-            this.scene.start('GameScene', { score: 0, fichas: 0, hasContinued: false });
+        // Botón Jugar - MODIFICADO
+        const playButton = this.add.text(this.scale.width / 2, buttonYStart, getText('playButton'), { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
+        applyButtonTweens(this, playButton, () => {
+            changeScene(this, 'GameScene', { score: 0, fichas: 0, hasContinued: false });
         });
 
-        // Botón Secreto
-        const secretButton = this.add.text(this.scale.width / 2, buttonYStart + buttonSpacing, 'VER SECRETO', { ...FONT_STYLE, fontSize: '26px', backgroundColor: '#a88f00', padding: { x: 15, y: 8 } }).setOrigin(0.5).setInteractive();
-        secretButton.on('pointerdown', () => { 
-            playSfx(this, 'click_sfx');
-            this.scene.start('SecretScene'); 
+        // Botón Secreto - MODIFICADO
+        const secretButton = this.add.text(this.scale.width / 2, buttonYStart + buttonSpacing, getText('secretButton'), { ...FONT_STYLE, fontSize: '26px', backgroundColor: '#a88f00', padding: { x: 15, y: 8 } }).setOrigin(0.5).setInteractive();
+        applyButtonTweens(this, secretButton, () => {
+            changeScene(this, 'SecretScene');
         });
 
-        // Botón Tienda (NUEVO)
-        const storeButton = this.add.text(this.scale.width / 2, buttonYStart + buttonSpacing * 2, 'TIENDA', { ...FONT_STYLE, fontSize: '26px', backgroundColor: '#006b5e', padding: { x: 15, y: 8 } }).setOrigin(0.5).setInteractive();
-        storeButton.on('pointerdown', () => { 
-            playSfx(this, 'click_sfx');
-            this.scene.start('StoreScene'); 
+
+        // Botón Tienda (NUEVO) - MODIFICADO
+        const storeButton = this.add.text(this.scale.width / 2, buttonYStart + buttonSpacing * 2, getText('storeButton'), { ...FONT_STYLE, fontSize: '26px', backgroundColor: '#006b5e', padding: { x: 15, y: 8 } }).setOrigin(0.5).setInteractive();
+        applyButtonTweens(this, storeButton, () => {
+            changeScene(this, 'StoreScene');
         });
 
-        // Botón Opciones
-        const optionsButton = this.add.text(this.scale.width / 2, buttonYStart + buttonSpacing * 3, 'OPCIONES', { ...FONT_STYLE, fontSize: '26px', backgroundColor: '#4a4a4a', padding: { x: 15, y: 8 } }).setOrigin(0.5).setInteractive();
-        optionsButton.on('pointerdown', () => { 
-            playSfx(this, 'click_sfx');
-            this.scene.start('OptionsScene'); 
+        // Botón Opciones - MODIFICADO
+        const optionsButton = this.add.text(this.scale.width / 2, buttonYStart + buttonSpacing * 3, getText('optionsButton'), { ...FONT_STYLE, fontSize: '26px', backgroundColor: '#4a4a4a', padding: { x: 15, y: 8 } }).setOrigin(0.5).setInteractive();
+        applyButtonTweens(this, optionsButton, () => {
+            changeScene(this, 'OptionsScene');
         });
         // --- FIN MODIFICADO ---
 
-        // Textos de puntuación (Reajustados)
-        this.add.text(this.scale.width / 2, this.scale.height - 100, `MÁXIMA PUNTUACIÓN: ${highscore}`, FONT_STYLE).setOrigin(0.5);
-        this.add.text(this.scale.width / 2, this.scale.height - 50, `CONCHAS TOTALES: ${totalFichas}`, FONT_STYLE).setOrigin(0.5);
+        // Textos de puntuación (Reajustados) - MODIFICADO
+        this.add.text(this.scale.width / 2, this.scale.height - 100, `${getText('highScoreLabel')}${highscore}`, FONT_STYLE).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height - 50, `${getText('totalShellsLabel')}${totalFichas}`, FONT_STYLE).setOrigin(0.5);
     }
 
     update() { this.background.tilePositionY -= 0.5; }
 }
 
 // =================================================================
-// SCENE: OPTIONS (NUEVA)
+// SCENE: OPTIONS (NUEVA Y MODIFICADA)
 // =================================================================
 class OptionsScene extends Phaser.Scene {
     constructor() { super('OptionsScene'); }
     
     create() {
+        // --- ✅ MODIFICADO: FADE IN más rápido ---
+        this.cameras.main.fadeIn(250, 0, 0, 0);
+        // --- FIN MODIFICADO ---
+
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
-        this.add.text(this.scale.width / 2, this.scale.height * 0.15, 'Opciones', { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height * 0.15, getText('optionsTitle'), { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
 
         const buttonStyle = { ...FONT_STYLE, fontSize: '20px', padding: { x: 10, y: 5 } };
         const buttonSpacing = 120;
 
         // --- Controles de Música ---
-        this.add.text(this.scale.width / 2, this.scale.height * 0.30, 'Música:', FONT_STYLE).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height * 0.30, getText('musicLabel'), FONT_STYLE).setOrigin(0.5);
         const musicButtonY = this.scale.height * 0.37;
         
-        this.musicButtonOff = this.add.text(this.scale.width / 2 - buttonSpacing, musicButtonY, 'OFF', { ...buttonStyle, backgroundColor: '#8b0000' }).setOrigin(0.5).setInteractive();
-        this.musicButtonLow = this.add.text(this.scale.width / 2, musicButtonY, 'BAJO', { ...buttonStyle, backgroundColor: '#a88f00' }).setOrigin(0.5).setInteractive();
-        this.musicButtonNormal = this.add.text(this.scale.width / 2 + buttonSpacing, musicButtonY, 'NORMAL', { ...buttonStyle, backgroundColor: '#004f27' }).setOrigin(0.5).setInteractive();
+        this.musicButtonOff = this.add.text(this.scale.width / 2 - buttonSpacing, musicButtonY, getText('volumeOff'), { ...buttonStyle, backgroundColor: '#8b0000' }).setOrigin(0.5).setInteractive();
+        this.musicButtonLow = this.add.text(this.scale.width / 2, musicButtonY, getText('volumeLow'), { ...buttonStyle, backgroundColor: '#a88f00' }).setOrigin(0.5).setInteractive();
+        this.musicButtonNormal = this.add.text(this.scale.width / 2 + buttonSpacing, musicButtonY, getText('volumeNormal'), { ...buttonStyle, backgroundColor: '#004f27' }).setOrigin(0.5).setInteractive();
 
-        this.musicButtonOff.on('pointerdown', () => this.updateMusicVolume(MUSIC_VOLUME_LEVELS.OFF));
-        this.musicButtonLow.on('pointerdown', () => this.updateMusicVolume(MUSIC_VOLUME_LEVELS.BAJO));
-        this.musicButtonNormal.on('pointerdown', () => this.updateMusicVolume(MUSIC_VOLUME_LEVELS.NORMAL));
+        applyButtonTweens(this, this.musicButtonOff, () => this.updateMusicVolume(MUSIC_VOLUME_LEVELS.OFF));
+        applyButtonTweens(this, this.musicButtonLow, () => this.updateMusicVolume(MUSIC_VOLUME_LEVELS.BAJO));
+        applyButtonTweens(this, this.musicButtonNormal, () => this.updateMusicVolume(MUSIC_VOLUME_LEVELS.NORMAL));
 
         // --- Controles de Efectos (SFX) ---
-        this.add.text(this.scale.width / 2, this.scale.height * 0.50, 'Efectos:', FONT_STYLE).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height * 0.50, getText('sfxLabel'), FONT_STYLE).setOrigin(0.5);
         const sfxButtonY = this.scale.height * 0.57;
 
-        this.sfxButtonOff = this.add.text(this.scale.width / 2 - buttonSpacing, sfxButtonY, 'OFF', { ...buttonStyle, backgroundColor: '#8b0000' }).setOrigin(0.5).setInteractive();
-        this.sfxButtonLow = this.add.text(this.scale.width / 2, sfxButtonY, 'BAJO', { ...buttonStyle, backgroundColor: '#a88f00' }).setOrigin(0.5).setInteractive();
-        this.sfxButtonNormal = this.add.text(this.scale.width / 2 + buttonSpacing, sfxButtonY, 'NORMAL', { ...buttonStyle, backgroundColor: '#004f27' }).setOrigin(0.5).setInteractive();
+        this.sfxButtonOff = this.add.text(this.scale.width / 2 - buttonSpacing, sfxButtonY, getText('volumeOff'), { ...buttonStyle, backgroundColor: '#8b0000' }).setOrigin(0.5).setInteractive();
+        this.sfxButtonLow = this.add.text(this.scale.width / 2, sfxButtonY, getText('volumeLow'), { ...buttonStyle, backgroundColor: '#a88f00' }).setOrigin(0.5).setInteractive();
+        this.sfxButtonNormal = this.add.text(this.scale.width / 2 + buttonSpacing, sfxButtonY, getText('volumeNormal'), { ...buttonStyle, backgroundColor: '#004f27' }).setOrigin(0.5).setInteractive();
 
-        this.sfxButtonOff.on('pointerdown', () => this.updateSfxVolume(SFX_VOLUME_LEVELS.OFF));
-        this.sfxButtonLow.on('pointerdown', () => this.updateSfxVolume(SFX_VOLUME_LEVELS.BAJO));
-        this.sfxButtonNormal.on('pointerdown', () => this.updateSfxVolume(SFX_VOLUME_LEVELS.NORMAL));
+        applyButtonTweens(this, this.sfxButtonOff, () => this.updateSfxVolume(SFX_VOLUME_LEVELS.OFF));
+        applyButtonTweens(this, this.sfxButtonLow, () => this.updateSfxVolume(SFX_VOLUME_LEVELS.BAJO));
+        applyButtonTweens(this, this.sfxButtonNormal, () => this.updateSfxVolume(SFX_VOLUME_LEVELS.NORMAL));
+
+        // --- Controles de Idioma --- (NUEVO)
+        this.add.text(this.scale.width / 2, this.scale.height * 0.70, getText('languageLabel'), FONT_STYLE).setOrigin(0.5);
+        const langButtonY = this.scale.height * 0.77;
+
+        this.langButtonES = this.add.text(this.scale.width / 2 - 80, langButtonY, 'Español', { ...buttonStyle, backgroundColor: '#004f27' }).setOrigin(0.5).setInteractive();
+        this.langButtonEN = this.add.text(this.scale.width / 2 + 80, langButtonY, 'English', { ...buttonStyle, backgroundColor: '#004f27' }).setOrigin(0.5).setInteractive();
+
+        applyButtonTweens(this, this.langButtonES, () => this.updateLanguage('es'));
+        applyButtonTweens(this, this.langButtonEN, () => this.updateLanguage('en'));
+        // --- Fin Idioma ---
+
 
         // --- Botón Volver ---
-        const backButton = this.add.text(this.scale.width / 2, this.scale.height * 0.85, 'VOLVER', { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
-        backButton.on('pointerdown', () => { 
-            playSfx(this, 'click_sfx');
-            this.scene.start('MainMenuScene'); 
+        const backButton = this.add.text(this.scale.width / 2, this.scale.height * 0.9, getText('backButton'), { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
+        applyButtonTweens(this, backButton, () => {
+            changeScene(this, 'MainMenuScene');
         });
 
+
         this.updateVolumeHighlights(); // Marcar botones activos al inicio
+        this.updateLanguageHighlights(); // Marcar idioma
     }
 
     updateMusicVolume(newVolume) {
-        playSfx(this, 'click_sfx');
+        // playSfx(this, 'click_sfx'); // Sonido ya se reproduce en el tween
         musicVolume = newVolume;
         localStorage.setItem('ascensoZenMusicVolume', musicVolume.toString());
 
@@ -316,8 +539,31 @@ class OptionsScene extends Phaser.Scene {
     updateSfxVolume(newVolume) {
         sfxVolume = newVolume;
         localStorage.setItem('ascensoZenSfxVolume', sfxVolume.toString());
-        playSfx(this, 'click_sfx'); // Reproduce con el *nuevo* volumen
+        // playSfx(this, 'click_sfx'); // Sonido ya se reproduce en el tween
         this.updateVolumeHighlights();
+        // Reproduce un sonido de prueba con el *nuevo* volumen *después* de la animación
+        this.time.delayedCall(110, () => playSfx(this, 'click_sfx'));
+    }
+
+    // --- NUEVA FUNCIÓN ---
+    updateLanguage(lang) {
+        currentLanguage = lang;
+        localStorage.setItem('ascensoZenLanguage', lang);
+        // playSfx(this, 'click_sfx'); // Sonido ya se reproduce en el tween
+        
+        // Importante: Reiniciar la escena para aplicar los cambios de texto
+        // Usamos changeScene para que sea suave
+        changeScene(this, 'OptionsScene');
+    }
+
+    // --- NUEVA FUNCIÓN ---
+    updateLanguageHighlights() {
+        // Resetea idioma
+        this.langButtonES.setAlpha(0.6);
+        this.langButtonEN.setAlpha(0.6);
+        // Destaca idioma
+        if (currentLanguage === 'es') this.langButtonES.setAlpha(1.0);
+        else if (currentLanguage === 'en') this.langButtonEN.setAlpha(1.0);
     }
 
     updateVolumeHighlights() {
@@ -350,11 +596,15 @@ class StoreScene extends Phaser.Scene {
     constructor() { super('StoreScene'); }
     
     create() {
-        this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
-        this.add.text(this.scale.width / 2, this.scale.height * 0.1, 'Tienda', { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
+        // --- ✅ MODIFICADO: FADE IN más rápido ---
+        this.cameras.main.fadeIn(250, 0, 0, 0);
+        // --- FIN MODIFICADO ---
 
-        // Mostrar conchas actuales
-        this.fichasText = this.add.text(this.scale.width / 2, this.scale.height * 0.18, `Conchas: ${totalFichas}`, FONT_STYLE).setOrigin(0.5);
+        this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
+        this.add.text(this.scale.width / 2, this.scale.height * 0.1, getText('storeTitle'), { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
+
+        // Mostrar conchas actuales - MODIFICADO
+        this.fichasText = this.add.text(this.scale.width / 2, this.scale.height * 0.18, `${getText('shellsLabel')}${totalFichas}`, FONT_STYLE).setOrigin(0.5);
 
         // --- ✅ MODIFICADO: Grid de Skins ---
         const startY = this.scale.height * 0.3;
@@ -386,11 +636,15 @@ class StoreScene extends Phaser.Scene {
             if (isUnlocked) {
                 if (isSelected) {
                     border.setStrokeStyle(6, 0xf3a800); // Borde dorado si está seleccionado
-                    this.add.text(x, y + 55, 'USANDO', { ...FONT_STYLE, fontSize: '16px', fill: '#f3a800' }).setOrigin(0.5);
+                    this.add.text(x, y + 55, getText('usingLabel'), { ...FONT_STYLE, fontSize: '16px', fill: '#f3a800' }).setOrigin(0.5);
                 } else {
                     // Si está desbloqueado pero no seleccionado, hacerlo clickeable
                     swatch.setInteractive().on('pointerdown', () => this.selectSkin(index));
-                    this.add.text(x, y + 55, 'Elegir', { ...FONT_STYLE, fontSize: '16px' }).setOrigin(0.5);
+                    // Aplicar tweens al swatch
+                    swatch.on('pointerover', () => swatch.setAlpha(0.8));
+                    swatch.on('pointerout', () => swatch.setAlpha(1.0));
+
+                    this.add.text(x, y + 55, getText('selectLabel'), { ...FONT_STYLE, fontSize: '16px' }).setOrigin(0.5);
                 }
             } else {
                 // Bloqueado
@@ -399,7 +653,8 @@ class StoreScene extends Phaser.Scene {
                 const buyButton = this.add.text(x, y + 55, `(${COLOR_COST})`, buyButtonStyle).setOrigin(0.5);
                 
                 if (totalFichas >= COLOR_COST) {
-                    buyButton.setInteractive().on('pointerdown', () => this.buySkin(index));
+                    buyButton.setInteractive();
+                    applyButtonTweens(this, buyButton, () => this.buySkin(index));
                 } else {
                     buyButton.setAlpha(0.5); // Gris si no puede comprar
                 }
@@ -409,10 +664,9 @@ class StoreScene extends Phaser.Scene {
 
 
         // --- Botón Volver ---
-        const backButton = this.add.text(this.scale.width / 2, this.scale.height * 0.9, 'VOLVER', { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
-        backButton.on('pointerdown', () => { 
-            playSfx(this, 'click_sfx');
-            this.scene.start('MainMenuScene'); 
+        const backButton = this.add.text(this.scale.width / 2, this.scale.height * 0.9, getText('backButton'), { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
+        applyButtonTweens(this, backButton, () => {
+            changeScene(this, 'MainMenuScene');
         });
     }
 
@@ -439,7 +693,8 @@ class StoreScene extends Phaser.Scene {
         playSfx(this, 'click_sfx');
         
         // Reiniciar la escena para actualizar visualmente la selección
-        this.scene.restart();
+        // this.scene.restart(); // <-- Reemplazado por changeScene para suavidad
+        changeScene(this, 'StoreScene');
     }
     // --- FIN MODIFICADO ---
     
@@ -470,6 +725,13 @@ class GameScene extends Phaser.Scene {
     // --- FIN MODIFICADO ---
 
     create() {
+        // --- ✅ MODIFICADO: FADE IN más rápido ---
+        // Fundido más rápido si es una continuación
+        const fadeInDuration = this.hasContinued ? 50 : 250;
+        this.cameras.main.fadeIn(fadeInDuration, 0, 0, 0);
+        // --- FIN MODIFICADO ---
+
+
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
         this.obstacles = this.physics.add.group({ immovable: true, allowGravity: false });
         this.fichasGroup = this.physics.add.group({ allowGravity: false });
@@ -486,7 +748,9 @@ class GameScene extends Phaser.Scene {
         const baseScaleY = this.player.scaleY;
         // --- FIN SOLUCIÓN ---
 
-        this.player.body.setSize(48, 48).setAllowGravity(false);
+        // --- ✅ MODIFICADO: Hitbox del jugador ajustada ---
+        this.player.body.setSize(50, 40).setAllowGravity(false); // Antes 48x48
+        // --- FIN MODIFICADO ---
         this.player.setCollideWorldBounds(true).setDepth(10);
 
         // --- ✅ MODIFICADO: La animación ahora usa la escala base ---
@@ -504,7 +768,8 @@ class GameScene extends Phaser.Scene {
         // --- FIN MODIFICADO ---
 
         if (this.hasContinued) {
-            const reviveText = this.add.text(this.scale.width / 2, this.scale.height / 2, '¡VIDA EXTRA!', { ...FONT_STYLE, fontSize: '36px', fill: '#93f300', stroke: '#000', strokeThickness: 6 }).setOrigin(0.5).setDepth(100);
+            // MODIFICADO
+            const reviveText = this.add.text(this.scale.width / 2, this.scale.height / 2, getText('extraLife'), { ...FONT_STYLE, fontSize: '36px', fill: '#93f300', stroke: '#000', strokeThickness: 6 }).setOrigin(0.5).setDepth(100);
             this.tweens.add({ targets: reviveText, alpha: 0, duration: 2000, delay: 500 });
         }
         
@@ -533,16 +798,21 @@ class GameScene extends Phaser.Scene {
             this.physics.add.collider(this.player, this.obstacles, this.gameOver, null, this);
         }
         this.physics.add.overlap(this.player, this.fichasGroup, this.collectFicha, null, this);
+        
+        // --- ✅ MODIFICADO: UI REPOSICIONADA ---
+        const uiY = 55; // Antes 35
         const uiStyle = { ...FONT_STYLE, fontSize: '28px', stroke: '#000', strokeThickness: 5 };
-        this.add.image(35, 35, 'collectible_almeja').setScale(0.8).setDepth(100);
-        this.fichasText = this.add.text(70, 35, `${this.fichas}`, uiStyle).setOrigin(0, 0.5).setDepth(100);
-        this.scoreText = this.add.text(this.scale.width / 2, 35, `0`, { ...uiStyle, fontSize: '36px' }).setOrigin(0.5).setDepth(100);
+        this.add.image(35, uiY, 'collectible_almeja').setScale(0.8).setDepth(100);
+        this.fichasText = this.add.text(70, uiY, `${this.fichas}`, uiStyle).setOrigin(0, 0.5).setDepth(100);
+        this.scoreText = this.add.text(this.scale.width / 2, uiY, `0`, { ...uiStyle, fontSize: '36px' }).setOrigin(0.5).setDepth(100);
         if (this.scoreMultiplier > 1) {
-            const bonusText = this.add.text(this.scoreText.x + this.scoreText.width / 2 + 10, 40, `x${this.scoreMultiplier}`, { ...FONT_STYLE, fontSize: '20px', fill: '#93f300' }).setOrigin(0, 0.5).setDepth(100);
+            const bonusText = this.add.text(this.scoreText.x + this.scoreText.width / 2 + 10, uiY + 5, `x${this.scoreMultiplier}`, { ...FONT_STYLE, fontSize: '20px', fill: '#93f300' }).setOrigin(0, 0.5).setDepth(100);
             this.scoreText.on('updateText', () => { bonusText.x = this.scoreText.x + this.scoreText.width / 2 + 10; });
         }
-        const trophyIcon = this.add.text(this.scale.width - 50, 35, `🏆`, { fontSize: '28px' }).setOrigin(1, 0.5).setDepth(100);
-        this.highscoreText = this.add.text(trophyIcon.x - trophyIcon.width - 5, 35, `${highscore}`, uiStyle).setOrigin(1, 0.5).setDepth(100);
+        const trophyIcon = this.add.text(this.scale.width - 50, uiY, `🏆`, { fontSize: '28px' }).setOrigin(1, 0.5).setDepth(100);
+        this.highscoreText = this.add.text(trophyIcon.x - trophyIcon.width - 5, uiY, `${highscore}`, uiStyle).setOrigin(1, 0.5).setDepth(100);
+        // --- FIN MODIFICADO ---
+
         
         // --- ✅ MODIFICADO: scoreTimer con lógica de progresión ---
         this.scoreTimer = this.time.addEvent({ delay: 100, callback: () => {
@@ -604,8 +874,9 @@ class GameScene extends Phaser.Scene {
     // --- ✅ MODIFICADO: createCrab() ---
     createCrab(x, y) {
         const crab = this.obstacles.create(x, y, 'obstacle_cangrejo');
-        crab.body.setSize(48, 25);
-        // Usa this.obstacleSpeed en lugar del valor fijo 250
+        // --- ✅ MODIFICADO: Hitbox del cangrejo ajustada ---
+        crab.body.setSize(48, 25); // Antes 48x25
+        // --- FIN MODIFICADO ---
         crab.body.velocity.y = this.obstacleSpeed;
         crab.setDepth(10);
         this.time.delayedCall(Phaser.Math.Between(0, 500), () => { if (crab.active) { crab.play('crab_pinch'); } });
@@ -651,9 +922,18 @@ class GameScene extends Phaser.Scene {
             const newCluesUnlocked = newCluesCount - oldCluesCount;
             maxFichasInRun = this.fichas;
             localStorage.setItem('ascensoZenMaxFichas', maxFichasInRun);
-            this.time.delayedCall(1000, () => this.scene.start('GameOverScene', { score: finalScore, fichas: this.fichas, hasContinued: this.hasContinued, newClues: newCluesUnlocked }));
+            
+            // --- MODIFICADO: USA changeScene ---
+            this.time.delayedCall(1000, () => {
+                // No podemos usar changeScene aquí porque no hay fadeOut, es un corte
+                this.scene.start('GameOverScene', { score: finalScore, fichas: this.fichas, hasContinued: this.hasContinued, newClues: newCluesUnlocked });
+            });
+
         } else {
-            this.time.delayedCall(1000, () => this.scene.start('GameOverScene', { score: finalScore, fichas: this.fichas, hasContinued: this.hasContinued, newClues: 0 }));
+            // --- MODIFICADO: USA changeScene ---
+            this.time.delayedCall(1000, () => {
+                this.scene.start('GameOverScene', { score: finalScore, fichas: this.fichas, hasContinued: this.hasContinued, newClues: 0 });
+            });
         }
     }
 }
@@ -664,19 +944,27 @@ class GameScene extends Phaser.Scene {
 class SecretScene extends Phaser.Scene {
     constructor() { super('SecretScene'); }
     create() {
+        // --- ✅ MODIFICADO: FADE IN más rápido ---
+        this.cameras.main.fadeIn(250, 0, 0, 0);
+        // --- FIN MODIFICADO ---
+
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
-        this.add.text(this.scale.width / 2, this.scale.height * 0.1, 'El Secreto', { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height * 0.1, getText('secretTitle'), { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
+        
+        // --- MODIFICADO: Carga dinámica del idioma ---
+        const SECRET_MESSAGE = getText('secretMessage');
         const unlockedCount = Math.floor(maxFichasInRun / 100);
         let revealedMessage = '';
         for (let i = 0; i < SECRET_MESSAGE.length; i++) {
             revealedMessage += (i < unlockedCount) ? (SECRET_MESSAGE[i] + ' ') : '??? ';
         }
+        // --- FIN MODIFICADO ---
+
         this.add.text(this.scale.width / 2, this.scale.height / 2, revealedMessage, { ...FONT_STYLE, fontSize: '28px', align: 'center', wordWrap: { width: this.scale.width * 0.9 } }).setOrigin(0.5);
-        const backButton = this.add.text(this.scale.width / 2, this.scale.height * 0.9, 'VOLVER', { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
+        const backButton = this.add.text(this.scale.width / 2, this.scale.height * 0.9, getText('backButton'), { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
         
-        backButton.on('pointerdown', () => { 
-            playSfx(this, 'click_sfx');
-            this.scene.start('MainMenuScene'); 
+        applyButtonTweens(this, backButton, () => {
+            changeScene(this, 'MainMenuScene');
         });
     }
     update() { this.background.tilePositionY -= 0.5; }
@@ -698,14 +986,19 @@ class GameOverScene extends Phaser.Scene {
     }
     
     create() {
+        // --- ✅ MODIFICADO: FADE IN más rápido ---
+        this.cameras.main.fadeIn(250, 0, 0, 0);
+        // --- FIN MODIFICADO ---
+
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
-        this.add.text(this.scale.width / 2, this.scale.height * 0.2, 'FIN DE LA PARTIDA', { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
-        this.add.text(this.scale.width / 2, this.scale.height * 0.28, `Puntos: ${this.score}`, FONT_STYLE).setOrigin(0.5);
-        this.add.text(this.scale.width / 2, this.scale.height * 0.35, `Conchas Recolectadas: ${this.fichas}`, FONT_STYLE).setOrigin(0.5);
-        this.add.text(this.scale.width / 2, this.scale.height * 0.42, `Conchas Totales: ${totalFichas}`, FONT_STYLE).setOrigin(0.5);
+        // MODIFICADO
+        this.add.text(this.scale.width / 2, this.scale.height * 0.2, getText('gameOverTitle'), { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height * 0.28, `${getText('scoreLabel')}${this.score}`, FONT_STYLE).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height * 0.35, `${getText('collectedLabel')}${this.fichas}`, FONT_STYLE).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height * 0.42, `${getText('totalShellsLabel')}${totalFichas}`, FONT_STYLE).setOrigin(0.5);
 
         if (this.newClues > 0) {
-            this.add.text(this.scale.width / 2, this.scale.height * 0.5, `¡Has revelado ${this.newClues} pista(s) nueva(s)!`, { ...FONT_STYLE, fill: '#93f300' }).setOrigin(0.5);
+            this.add.text(this.scale.width / 2, this.scale.height * 0.5, getText('newClues', this.newClues), { ...FONT_STYLE, fill: '#93f300' }).setOrigin(0.5);
         }
 
         if (!this.hasContinued) this.createContinueOptions();
@@ -717,24 +1010,25 @@ class GameOverScene extends Phaser.Scene {
     createContinueOptions() {
         this.continueWithCoinsButton = null;
         if (totalFichas >= CONTINUE_COST) {
-            this.continueWithCoinsButton = this.add.text(this.scale.width / 2, this.scale.height * 0.6, `1 VIDA EXTRA (${CONTINUE_COST} Conchas)`, { ...FONT_STYLE, fontSize: '22px', backgroundColor: '#004f27', padding: { x: 15, y: 10 } }).setOrigin(0.5).setInteractive();
-            this.continueWithCoinsButton.on('pointerdown', () => { 
-                playSfx(this, 'click_sfx');
+            // MODIFICADO
+            this.continueWithCoinsButton = this.add.text(this.scale.width / 2, this.scale.height * 0.6, getText('continueCost', CONTINUE_COST), { ...FONT_STYLE, fontSize: '22px', backgroundColor: '#004f27', padding: { x: 15, y: 10 } }).setOrigin(0.5).setInteractive();
+            applyButtonTweens(this, this.continueWithCoinsButton, () => {
                 totalFichas -= CONTINUE_COST; 
                 localStorage.setItem('ascensoZenFichas', totalFichas); 
-                this.scene.start('GameScene', { score: this.score, fichas: 0, hasContinued: true }); 
+                changeScene(this, 'GameScene', { score: this.score, fichas: 0, hasContinued: true });
             });
         }
         
-        this.adButton = this.add.text(this.scale.width / 2, this.scale.height * 0.75, `1 VIDA EXTRA (Ver Anuncio)`, { ...FONT_STYLE, fontSize: '22px', backgroundColor: '#a88f00', padding: { x: 15, y: 10 } }).setOrigin(0.5).setInteractive();
-        this.adButton.on('pointerdown', () => { 
-            playSfx(this, 'click_sfx');
-            this.showAdAndContinue();
+        // MODIFICADO
+        this.adButton = this.add.text(this.scale.width / 2, this.scale.height * 0.75, getText('continueAd'), { ...FONT_STYLE, fontSize: '22px', backgroundColor: '#a88f00', padding: { x: 15, y: 10 } }).setOrigin(0.5).setInteractive();
+        applyButtonTweens(this, this.adButton, () => {
+             this.showAdAndContinue();
         });
 
-        this.endButton = this.add.text(this.scale.width / 2, this.scale.height * 0.9, 'TERMINAR', { ...FONT_STYLE, fontSize: '18px' }).setOrigin(0.5).setInteractive();
-        this.endButton.on('pointerdown', () => { 
-            playSfx(this, 'click_sfx');
+
+        // MODIFICADO
+        this.endButton = this.add.text(this.scale.width / 2, this.scale.height * 0.9, getText('endButton'), { ...FONT_STYLE, fontSize: '18px' }).setOrigin(0.5).setInteractive();
+        applyButtonTweens(this, this.endButton, () => {
             if (this.continueWithCoinsButton) this.continueWithCoinsButton.destroy();
             this.adButton.destroy();
             this.endButton.destroy();
@@ -743,25 +1037,27 @@ class GameOverScene extends Phaser.Scene {
     }
 
     createEndGameButtons() {
-        this.add.text(this.scale.width / 2, this.scale.height * 0.55, `Máximo: ${highscore}`, { ...FONT_STYLE, fill: '#f3a800' }).setOrigin(0.5);
-        const menuButton = this.add.text(this.scale.width / 2, this.scale.height * 0.68, 'MENÚ PRINCIPAL', { ...FONT_STYLE, fontSize: '28px', backgroundColor: '#3d006b', padding: { x: 15, y: 10 } }).setOrigin(0.5).setInteractive();
-        menuButton.on('pointerdown', () => { 
-            playSfx(this, 'click_sfx');
-            this.scene.start('MainMenuScene'); 
+        // MODIFICADO
+        this.add.text(this.scale.width / 2, this.scale.height * 0.55, `${getText('maxScoreLabel')}${highscore}`, { ...FONT_STYLE, fill: '#f3a800' }).setOrigin(0.5);
+        const menuButton = this.add.text(this.scale.width / 2, this.scale.height * 0.68, getText('menuButton'), { ...FONT_STYLE, fontSize: '28px', backgroundColor: '#3d006b', padding: { x: 15, y: 10 } }).setOrigin(0.5).setInteractive();
+        applyButtonTweens(this, menuButton, () => {
+            changeScene(this, 'MainMenuScene');
         });
+
         
         const rewardCost = 100;
-        const rewardButton = this.add.text(this.scale.width / 2, this.scale.height * 0.82, `Bonus x1.2 Próxima Partida (${rewardCost} Conchas)`, { ...FONT_STYLE, fontSize: '18px', align: 'center', backgroundColor: '#004f27', padding: { x: 10, y: 5 } }).setOrigin(0.5);
+        // MODIFICADO
+        const rewardButton = this.add.text(this.scale.width / 2, this.scale.height * 0.82, getText('bonusButton', rewardCost), { ...FONT_STYLE, fontSize: '18px', align: 'center', backgroundColor: '#004f27', padding: { x: 10, y: 5 } }).setOrigin(0.5);
         if (totalFichas >= rewardCost) {
-            rewardButton.setInteractive().on('pointerdown', () => { 
-                playSfx(this, 'click_sfx');
+            rewardButton.setInteractive()
+            applyButtonTweens(this, rewardButton, () => {
                 totalFichas -= rewardCost; 
                 localStorage.setItem('ascensoZenFichas', totalFichas);
                 localStorage.setItem('ascensoZenBonusActive', 'true');
-                rewardButton.setText('¡Bonus Activado!').disableInteractive().setStyle({ backgroundColor: '#333' }); 
+                rewardButton.setText(getText('bonusActive')).disableInteractive().setStyle({ backgroundColor: '#333' }); 
             });
         } else { 
-            rewardButton.setText(`Bonus x1.2 (Necesitas ${rewardCost})`).setAlpha(0.5); 
+            rewardButton.setText(getText('bonusNeeds', rewardCost)).setAlpha(0.5); 
         }
     }
 
@@ -772,10 +1068,16 @@ class GameOverScene extends Phaser.Scene {
         const overlay = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.7).setOrigin(0,0);
         overlay.setInteractive(); // Bloquea los clics a lo que esté debajo
         
-        const loadingText = this.add.text(this.scale.width / 2, this.scale.height / 2 - 50, 'Cargando anuncio...', FONT_STYLE).setOrigin(0.5);
+        // MODIFICADO
+        const loadingText = this.add.text(this.scale.width / 2, this.scale.height / 2 - 50, getText('loadingAd'), FONT_STYLE).setOrigin(0.5);
         
-        const cancelButton = this.add.text(this.scale.width / 2, this.scale.height / 2 + 50, 'CANCELAR', { ...FONT_STYLE, fontSize: '22px', backgroundColor: '#8b0000', padding: { x: 15, y: 10 } }).setOrigin(0.5);
-        cancelButton.setInteractive().on('pointerdown', onCancel);
+        // MODIFICADO
+        const cancelButton = this.add.text(this.scale.width / 2, this.scale.height / 2 + 50, getText('cancelButton'), { ...FONT_STYLE, fontSize: '22px', backgroundColor: '#8b0000', padding: { x: 15, y: 10 } }).setOrigin(0.5);
+        cancelButton.setInteractive();
+        applyButtonTweens(this, cancelButton, () => {
+            onCancel();
+        });
+
 
         this.adLoadingUI.addMultiple([overlay, loadingText, cancelButton]);
         this.adLoadingUI.setDepth(200); // Asegura que esté por encima de todo
@@ -794,7 +1096,8 @@ class GameOverScene extends Phaser.Scene {
         
         if (!adMobInitialized) {
             console.error("AdMob no está listo.");
-            const errorText = this.add.text(this.scale.width / 2, this.adButton.y + 60, 'Publicidad no disponible ahora.', { ...FONT_STYLE, fontSize: '16px', fill: '#ff6961' }).setOrigin(0.5);
+            // MODIFICADO
+            const errorText = this.add.text(this.scale.width / 2, this.adButton.y + 60, getText('adError'), { ...FONT_STYLE, fontSize: '16px', fill: '#ff6961' }).setOrigin(0.5);
             this.time.delayedCall(3000, () => errorText.destroy());
             return;
         }
@@ -811,14 +1114,18 @@ class GameOverScene extends Phaser.Scene {
             
             console.log(`[AdManager] Limpiando y reanudando escena. Razón: ${reason}`);
             
-            if (adTimeout && adTimeout.remove) adTimeout.remove();
+            // --- MODIFICACIÓN: TIMEOUT ELIMINADO ---
+            // if (adTimeout && adTimeout.remove) adTimeout.remove();
+            // --- FIN MODIFICACIÓN ---
+
             this.cleanupListeners();
             this.hideAdLoadingUI();
             this.isAdShowing = false;
         };
 
-        // --- Timeout de 15 segundos ---
-        const adTimeout = this.time.delayedCall(15000, () => cleanupAndResume("Timeout de 15s alcanzado"));
+        // --- MODIFICACIÓN: TIMEOUT ELIMINADO ---
+        // const adTimeout = this.time.delayedCall(15000, () => cleanupAndResume("Timeout de 15s alcanzado"));
+        // --- FIN MODIFICACIÓN ---
         
         // --- Mostrar UI de carga con botón de cancelar ---
         this.showAdLoadingUI(() => cleanupAndResume("Usuario canceló manualmente"));
@@ -840,10 +1147,18 @@ class GameOverScene extends Phaser.Scene {
             if (rewardResult && rewardResult.amount > 0) {
                 console.log('RECOMPENSA OBTENIDA', rewardResult);
                 isHandled = true;
-                adTimeout.remove();
+                
+                // --- MODIFICACIÓN: TIMEOUT ELIMINADO ---
+                // adTimeout.remove();
+                // --- FIN MODIFICACIÓN ---
+
                 this.cleanupListeners();
                 this.hideAdLoadingUI();
-                this.scene.start('GameScene', { score: this.score, fichas: 0, hasContinued: true });
+                
+                // --- MODIFICADO: USA changeScene ---
+                //this.scene.start('GameScene', { score: this.score, fichas: 0, hasContinued: true });
+                changeScene(this, 'GameScene', { score: this.score, fichas: 0, hasContinued: true });
+
             } else {
                 cleanupAndResume("Anuncio visto pero sin recompensa");
             }
@@ -865,7 +1180,11 @@ class GameOverScene extends Phaser.Scene {
 // =================================================================
 const config = {
     type: Phaser.AUTO,
+    // --- ✅ MODIFICADO: pixelArt activado ---
+    pixelArt: true,
+    // --- ✅ MODIFICADO: Escalado FIT ---
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: 450, height: 800 },
+    // --- ✅ MODIFICADO: debug activado ---
     physics: { default: 'arcade', arcade: { debug: false } },
     // --- ✅ MODIFICADO: Añadidas OptionsScene y StoreScene ---
     scene: [PreloaderScene, MainMenuScene, OptionsScene, StoreScene, GameScene, SecretScene, GameOverScene],
