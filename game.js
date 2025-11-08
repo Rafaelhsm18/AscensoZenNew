@@ -223,7 +223,7 @@ console.log("Juego Versión 1.2");
 const FONT_STYLE = { fontFamily: '"Gill Sans", "Trebuchet MS", Arial, sans-serif', fontSize: '24px', fill: '#ffffff' };
 const CONTINUE_COST = 30;
 // --- ✅ MODIFICADO: De Colores a Skins (Imágenes) ---
-const PLAYER_SKINS = ['player_medusa', 'medusaVerde', 'medusaOro']; 
+const PLAYER_SKINS = ['player_medusa', 'medusaZoombie', 'medusaMorada']; 
 // --- FIN MODIFICADO ---
 
 let highscore = localStorage.getItem('ascensoZenHighscore') || 0;
@@ -381,8 +381,8 @@ class PreloaderScene extends Phaser.Scene {
         
         // --- ✅ MODIFICADO: Carga de todos los skins ---
         this.load.image('player_medusa', 'assets/medusa.png');
-        this.load.image('medusaVerde', 'assets/medusaVerde.png');
-        this.load.image('medusaOro', 'assets/medusaOro.png');
+        this.load.image('medusaZoombie', 'assets/medusaZoombie.png');
+        this.load.image('medusaMorada', 'assets/medusaMorada.png');
         // --- FIN MODIFICADO ---
 
         this.load.image('obstacle_cangrejo', 'assets/cangrejo.png');
@@ -394,6 +394,7 @@ class PreloaderScene extends Phaser.Scene {
         this.load.audio('gameover_sfx', 'audio/gameover.wav');
         this.load.audio('click_sfx', 'audio/click.wav');
         this.load.audio('impulse_sfx', 'audio/impulso.mp3');
+        this.load.image('obstacle_pezglobo', 'assets/pezglobo.png');
     }
 }
 
@@ -720,6 +721,7 @@ class GameScene extends Phaser.Scene {
         this.obstacleSpeed = 250; // Velocidad inicial de cangrejos
         this.fichaSpeed = 300;    // Velocidad inicial de conchas
         this.safeGap = 220;       // Tamaño inicial del hueco
+        this.pufferFishHorizSpeed = 70; // Velocidad horizontal inicial del pez
         // --- FIN NUEVO ---
     }
     // --- FIN MODIFICADO ---
@@ -730,6 +732,10 @@ class GameScene extends Phaser.Scene {
         const fadeInDuration = this.hasContinued ? 50 : 250;
         this.cameras.main.fadeIn(fadeInDuration, 0, 0, 0);
         // --- FIN MODIFICADO ---
+
+        // --- ✅ NUEVO: Grupo para el pez globo ---
+        this.obstacles = this.physics.add.group({ immovable: true, allowGravity: false });
+        this.pufferFishGroup = this.physics.add.group({ immovable: true, allowGravity: false }); // <-- AÑADE ESTA LÍNEA
 
 
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
@@ -754,15 +760,29 @@ class GameScene extends Phaser.Scene {
         this.player.setCollideWorldBounds(true).setDepth(10);
 
         // --- ✅ MODIFICADO: La animación ahora usa la escala base ---
-        this.tweens.add({ 
-            targets: this.player, 
-            // Anima a 1.15 *veces* la escala base, no al valor absoluto 1.15
-            scaleX: baseScaleX * 1.15, 
-            scaleY: baseScaleY * 0.85, 
-            duration: 700, 
-            yoyo: true, 
-            repeat: -1, 
-            ease: 'Sine.easeInOut' 
+        this.tweens.add({
+            targets: this.player,
+            scaleX: baseScaleX * 1.10, // Aumenta un 5% el ancho
+            scaleY: baseScaleY * 1.10, // Aumenta un 5% el alto
+            duration: 1200,            // Más lento, para que sea relajante
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
+        // Modificación del listener de 'pointerdown'
+        this.input.on('pointerdown', () => {
+            playSfx(this, 'impulse_sfx', { volume: 0.05 });
+
+            // Añadimos una animación de reacción rápida
+            this.tweens.add({
+                targets: this.player,
+                scaleX: baseScaleX * 1.2, // Se ensancha al "empujar"
+                scaleY: baseScaleY * 0.8, // Se achata al "empujar"
+                duration: 80,             // Muy rápido
+                yoyo: true,                 // Vuelve solo
+                ease: 'Quad.easeOut'
+            });
         });
 
         // --- FIN MODIFICADO ---
@@ -793,9 +813,17 @@ class GameScene extends Phaser.Scene {
 
         if (this.hasContinued) {
             this.player.setAlpha(0.5);
-            this.time.delayedCall(2000, () => { this.player.setAlpha(1.0); this.physics.add.collider(this.player, this.obstacles, this.gameOver, null, this); });
+            this.time.delayedCall(2000, () => { this.player.setAlpha(1.0); this.physics.add.collider(this.player, this.obstacles, this.gameOver, null, this); 
+                // --- ✅ NUEVO: Collider para el pez globo ---
+                this.physics.add.collider(this.player, this.pufferFishGroup, this.gameOver, null, this); // <-- AÑADE ESTA LÍNEA
+                // --- FIN NUEVO --
+
+            });
         } else {
             this.physics.add.collider(this.player, this.obstacles, this.gameOver, null, this);
+            // --- ✅ NUEVO: Collider para el pez globo ---
+            this.physics.add.collider(this.player, this.pufferFishGroup, this.gameOver, null, this); // <-- AÑADE ESTA LÍNEA
+            // --- FIN NUEVO ---
         }
         this.physics.add.overlap(this.player, this.fichasGroup, this.collectFicha, null, this);
         
@@ -830,6 +858,7 @@ class GameScene extends Phaser.Scene {
             if (this.score > 0 && this.score % 150 === 0) { 
                 this.obstacleSpeed = Math.min(1000, this.obstacleSpeed + 10); 
                 this.fichaSpeed = Math.min(1000, this.fichaSpeed + 12); 
+                this.pufferFishHorizSpeed = Math.min(300, this.pufferFishHorizSpeed + 8);
                 console.log("DIFICULTAD: Velocidad aumentada:", this.obstacleSpeed);
             }
 
@@ -837,8 +866,15 @@ class GameScene extends Phaser.Scene {
             if (this.score > 0 && this.score % 300 === 0) { 
                 const newDelay = Math.max(800, this.obstacleTimer.delay - 50); 
                 this.obstacleTimer.delay = newDelay;
+
+                // 🔹 Actualizar también el delay del pez globo para mantener la proporción
+                const newPufferDelay = newDelay * 1.5;
+                this.pufferFishTimer.delay = newPufferDelay;
+
                 console.log("DIFICULTAD: Frecuencia aumentada, nuevo delay:", newDelay);
+                console.log("DIFICULTAD: PufferFish sincronizado, nuevo delay:", newPufferDelay);
             }
+
 
             // Cada 500 puntos (El primer gran hito)
             if (this.score > 0 && this.score % 500 === 0) { 
@@ -853,8 +889,18 @@ class GameScene extends Phaser.Scene {
         // --- ✅ MODIFICADO: Guardado en this.obstacleTimer ---
         this.obstacleTimer = this.time.addEvent({ delay: 1500, callback: this.addObstacleRow, callbackScope: this, loop: true });
         // --- FIN MODIFICADO ---
-        
+
         this.time.addEvent({ delay: 3100, callback: this.addFicha, callbackScope: this, loop: true });
+    
+        // Aparece cada 2250ms (1.5 veces el delay de los cangrejos)
+        this.pufferFishTimer = this.time.addEvent({ 
+            delay: 7500, 
+            startAt: 3750,
+            callback: this.spawnPatrollerPufferFish, // Usamos una nueva función
+            callbackScope: this, 
+            loop: true 
+        });
+        // --- FIN DEL NUEVO TIMER ---
     }
     update() {
         this.background.tilePositionY -= 1.0;
@@ -862,14 +908,14 @@ class GameScene extends Phaser.Scene {
     }
 
     // --- ✅ MODIFICADO: addObstacleRow() ---
-    addObstacleRow() {
+   addObstacleRow() {
         // Usa this.safeGap en lugar del valor fijo 220
         const gap = this.safeGap; 
         const position = Phaser.Math.Between(50 + gap / 2, this.scale.width - 50 - gap / 2);
         for (let x = 48 / 2; x < position - gap / 2; x += 48) { this.createCrab(x, -50); }
         for (let x = position + gap / 2 + 48 / 2; x < this.scale.width; x += 48) { this.createCrab(x, -50); }
     }
-    // --- FIN MODIFICADO ---
+
 
     // --- ✅ MODIFICADO: createCrab() ---
     createCrab(x, y) {
@@ -882,7 +928,40 @@ class GameScene extends Phaser.Scene {
         this.time.delayedCall(Phaser.Math.Between(0, 500), () => { if (crab.active) { crab.play('crab_pinch'); } });
         this.time.delayedCall(5000, () => { if (crab.active) crab.destroy(); });
     }
-    // --- FIN MODIFICADO ---
+
+/// --- ✅ PASO 4: AÑADE ESTA NUEVA FUNCIÓN ---
+    spawnPatrollerPufferFish() {
+        
+        // 1. DÓNDE APARECE (Y)
+        const y_spawn = -50; // Arriba de la pantalla
+
+        // 2. DÓNDE APARECE (X) Y VELOCIDAD HORIZONTAL
+        const side = Phaser.Math.Between(0, 1);
+        const x_spawn = (side === 0) ? -50 : this.scale.width + 50; // Izquierda o Derecha
+        
+        // Velocidad horizontal constante
+        const velocityX = (side === 0) ? this.pufferFishHorizSpeed : -this.pufferFishHorizSpeed;
+        // 3. VELOCIDAD VERTICAL (Como los cangrejos)
+        const velocityY = this.obstacleSpeed; // ¡Exactamente la misma que los cangrejos!
+
+        // 4. CREAR EL PEZ
+        const pufferFish = this.pufferFishGroup.create(x_spawn, y_spawn, 'obstacle_pezglobo');
+        
+        pufferFish.setDisplaySize(100, 100); 
+        pufferFish.body.setSize(100, 100);
+        pufferFish.setDepth(5); 
+
+        // 5. LANZAR EL PEZ
+        pufferFish.body.velocity.x = velocityX;
+        pufferFish.body.velocity.y = velocityY;
+
+        // 6. LIMPIEZA
+        this.time.delayedCall(8000, () => { 
+            if (pufferFish.active) pufferFish.destroy(); 
+        });
+    }
+    // --- FIN DE LA NUEVA FUNCIÓN ---
+ 
 
     // --- ✅ MODIFICADO: addFicha() ---
     addFicha() {
@@ -1181,11 +1260,11 @@ class GameOverScene extends Phaser.Scene {
 const config = {
     type: Phaser.AUTO,
     // --- ✅ MODIFICADO: pixelArt activado ---
-    pixelArt: true,
+    pixelArt: false,
     // --- ✅ MODIFICADO: Escalado FIT ---
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: 450, height: 800 },
     // --- ✅ MODIFICADO: debug activado ---
-    physics: { default: 'arcade', arcade: { debug: false } },
+    physics: { default: 'arcade', arcade: { debug: true } },
     // --- ✅ MODIFICADO: Añadidas OptionsScene y StoreScene ---
     scene: [PreloaderScene, MainMenuScene, OptionsScene, StoreScene, GameScene, SecretScene, GameOverScene],
     backgroundColor: '#0d0014'
