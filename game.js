@@ -67,7 +67,12 @@ const allStrings = {
         'bonusNeeds': (c) => `Jugar + Bonus (Req: ${c})`, 
         'loadingAd': 'Cargando anuncio...',
         'cancelButton': 'CANCELAR',
-        'adError': 'Publicidad no disponible ahora.'
+        'adError': 'Publicidad no disponible ahora.',
+
+        'missionsButton': 'MISIONES',
+        'missionsTitle': 'Misiones Diarias',
+        'missionClaim': 'RECLAMAR',
+        'missionComplete': '¡COMPLETADO!',
     },
     'en': {
         // MainMenuScene
@@ -134,8 +139,39 @@ const allStrings = {
         'bonusNeeds': (c) => `Play + Bonus (Req: ${c})`,
         'loadingAd': 'Loading ad...',
         'cancelButton': 'CANCEL',
-        'adError': 'Ads not available right now.'
+        'adError': 'Ads not available right now.',
+
+        'missionsButton': 'MISSIONS',
+        'missionsTitle': 'Daily Missions',
+        'missionClaim': 'CLAIM',
+        'missionComplete': 'COMPLETED!',
     }
+};
+// =================================================================
+// MISSION SYSTEM DEFINITIONS
+// =================================================================
+const MISSION_POOL = {
+    easy: [
+        { id: 'e1', type: 'PLAY_GAMES', goal: 1, text_es: 'Juega 1 partida', text_en: 'Play 1 game' },
+        { id: 'e2', type: 'COLLECT_SHELLS_TOTAL', goal: 25, text_es: 'Recoge 25 conchas en total', text_en: 'Collect 25 shells in total' },
+        { id: 'e3', type: 'SCORE_POINTS_SINGLE', goal: 500, text_es: 'Consigue 500 puntos en una partida', text_en: 'Get 500 points in one game' }
+    ],
+    medium: [
+        { id: 'm1', type: 'USE_SHIELD_TOTAL', goal: 3, text_es: 'Usa 3 escudos', text_en: 'Use 3 shields' },
+        { id: 'm2', type: 'COLLECT_SHELLS_TOTAL', goal: 100, text_es: 'Recoge 100 conchas en total', text_en: 'Collect 100 shells in total' },
+        { id: 'm3', type: 'SCORE_POINTS_TOTAL', goal: 5000, text_es: 'Consigue 5000 puntos en total', text_en: 'Get 5000 points in total' } // <-- TIPO CORREGIDO
+    ],
+    hard: [
+        { id: 'h1', type: 'PLAY_GAMES', goal: 5, text_es: 'Juega 5 partidas', text_en: 'Play 5 games' },
+        { id: 'h2', type: 'COLLECT_SHELLS_SINGLE', goal: 50, text_es: 'Recoge 50 conchas en una partida', text_en: 'Collect 50 shells in one game' },
+        { id: 'h3', type: 'USE_MAGNET_TOTAL', goal: 10, text_es: 'Recoge 10 imanes', text_en: 'Collect 10 magnets' }
+    ]
+};
+
+const MISSION_REWARDS = {
+    easy: 10,
+    medium: 50,
+    hard: 100
 };
 
 // Variable global para el idioma
@@ -323,7 +359,57 @@ function playSfx(scene, key, config = {}) {
         scene.sound.play(key, { ...config, volume: effectiveVolume });
     }
 }
-// --- FIN NUEVO ---
+
+/**
+ * ✅ NUEVA FUNCIÓN GLOBAL DE MISIONES
+ * Comprueba la fecha y genera 3 nuevas misiones (una de cada dificultad) si es un nuevo día.
+ * Guarda las misiones activas en localStorage.
+ */
+function updateDailyMissions() {
+    const today = new Date().toDateString(); // "Sun Nov 09 2025"
+    const lastDay = localStorage.getItem('ascensoZenMissionsLastDay');
+
+    // Si ya se generaron hoy, no hacer nada
+    if (today === lastDay) {
+        // console.log("Misiones diarias ya generadas para hoy."); // Descomentar para debug
+        return;
+    }
+
+    console.log("Generando nuevas misiones diarias...");
+
+    // 1. Elegir una misión aleatoria de cada grupo
+    const easyMission = MISSION_POOL.easy[Phaser.Math.Between(0, MISSION_POOL.easy.length - 1)];
+    const mediumMission = MISSION_POOL.medium[Phaser.Math.Between(0, MISSION_POOL.medium.length - 1)];
+    const hardMission = MISSION_POOL.hard[Phaser.Math.Between(0, MISSION_POOL.hard.length - 1)];
+
+    // 2. Preparar el objeto de la misión para guardar
+    // --- ¡CAMBIO IMPORTANTE! ---
+    // Solo guardamos el 'id' y el estado. El texto se buscará en vivo.
+    const setupMission = (mission, difficulty) => {
+        return {
+            id: mission.id, // Guardamos el ID
+            type: mission.type, // Guardamos el tipo
+            goal: mission.goal, // Guardamos el objetivo
+            reward: MISSION_REWARDS[difficulty],
+            progress: 0,
+            claimed: false,
+            difficulty: difficulty
+        };
+    };
+    // --- FIN DEL CAMBIO ---
+
+    const activeMissions = [
+        setupMission(easyMission, 'easy'),
+        setupMission(mediumMission, 'medium'),
+        setupMission(hardMission, 'hard')
+    ];
+
+    // 3. Guardar en localStorage
+    localStorage.setItem('ascensoZenActiveMissions', JSON.stringify(activeMissions));
+    localStorage.setItem('ascensoZenMissionsLastDay', today);
+}
+
+
 
 // --- ✅ NUEVO: Handlers de Pausa/Reanudación de App ---
 function onAppPause() {
@@ -473,7 +559,7 @@ class MainMenuScene extends Phaser.Scene {
     create() {
         // --- ✅ MODIFICADO: FADE IN más rápido ---
         this.cameras.main.fadeIn(250, 0, 0, 0);
-     
+        updateDailyMissions();
 
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
         highscore = localStorage.getItem('ascensoZenHighscore') || 0;
@@ -485,30 +571,43 @@ class MainMenuScene extends Phaser.Scene {
         gradient.addColorStop(0, '#87CEEB'); gradient.addColorStop(1, '#00BFFF');
         title.setFill(gradient);
 
-const buttonYStart = this.scale.height * 0.40;
-        const buttonSpacing = 85;
+        const buttonYStart = this.scale.height * 0.38; // Un poco más arriba
+        const buttonSpacing = 75; // Un poco más juntos
         const mainButtonWidth = this.scale.width * 0.65;
-        const mainButtonHeight = 65;
+        const mainButtonHeight = 60; // Un poco más delgados
         const secondaryButtonWidth = this.scale.width * 0.55;
-        const secondaryButtonHeight = 55;
+        const secondaryButtonHeight = 50;
 
         // Botón Jugar (Principal)
         createStyledButton(
             this, // <-- Pasamos la escena
             this.scale.width / 2, 
-            buttonYStart, 
+            buttonYStart, // Posición 1
             getText('playButton'), 
             mainButtonWidth, 
             mainButtonHeight, 
             0x3d006b, 0x9d4bff, 
             () => { changeScene(this, 'GameScene', { score: 0, fichas: 0, hasContinued: false }); }
         );
+        // --- ✅ NUEVO: Botón Misiones ---
+        createStyledButton(
+            this,
+            this.scale.width / 2, 
+            buttonYStart + buttonSpacing, // Posición 2
+            getText('missionsButton'), 
+            secondaryButtonWidth, 
+            secondaryButtonHeight, 
+            0x004f27, 0x00b359, // Color verde
+            () => { changeScene(this, 'MissionsScene'); }
+        );
+
+        // --- ✅ ¡ARREGLO AQUÍ! ---
 
         // Botón Secreto (Secundario)
         createStyledButton(
             this, // <-- Pasamos la escena
             this.scale.width / 2, 
-            buttonYStart + buttonSpacing, 
+            buttonYStart + buttonSpacing * 2, // <-- CAMBIO (Antes * 1)
             getText('secretButton'), 
             secondaryButtonWidth, 
             secondaryButtonHeight, 
@@ -520,7 +619,7 @@ const buttonYStart = this.scale.height * 0.40;
         createStyledButton(
             this, // <-- Pasamos la escena
             this.scale.width / 2, 
-            buttonYStart + buttonSpacing * 2, 
+            buttonYStart + buttonSpacing * 3, // <-- CAMBIO (Antes * 2)
             getText('storeButton'), 
             secondaryButtonWidth, 
             secondaryButtonHeight, 
@@ -532,13 +631,14 @@ const buttonYStart = this.scale.height * 0.40;
         createStyledButton(
             this, // <-- Pasamos la escena
             this.scale.width / 2, 
-            buttonYStart + buttonSpacing * 3, 
+            buttonYStart + buttonSpacing * 4, // <-- CAMBIO (Antes * 3)
             getText('optionsButton'), 
             secondaryButtonWidth, 
             secondaryButtonHeight, 
             0x4a4a4a, 0xb5b5b5, 
             () => { changeScene(this, 'OptionsScene'); }
         );
+        // --- FIN DEL ARREGLO ---
         
 
         // Textos de puntuación (Reajustados) - MODIFICADO
@@ -859,6 +959,124 @@ class StoreScene extends Phaser.Scene {
 
 
 // =================================================================
+// SCENE: MISSIONS (NUEVA)
+// =================================================================
+class MissionsScene extends Phaser.Scene {
+    constructor() { super('MissionsScene'); }
+
+    create() {
+        this.cameras.main.fadeIn(250, 0, 0, 0);
+        this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
+        this.add.text(this.scale.width / 2, this.scale.height * 0.1, getText('missionsTitle'), { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
+
+        // Cargar misiones activas (contienen id, progress, claimed)
+        this.activeMissions = JSON.parse(localStorage.getItem('ascensoZenActiveMissions') || '[]');
+        
+        // Colores para las barras de progreso
+        const difficultyColors = {
+            easy: { fill: 0x00b359, stroke: 0x00f5d4 },
+            medium: { fill: 0x004a6b, stroke: 0x00a2f5 },
+            hard: { fill: 0x8b0000, stroke: 0xff6b6b }
+        };
+
+        const startY = this.scale.height * 0.25;
+        const yIncrement = 150;
+
+        // --- ¡CAMBIO IMPORTANTE DE LÓGICA DE IDIOMA! ---
+        
+        // Unir todos los pools de misiones en un solo lugar para buscar fácil
+        const allMissionsPool = [
+            ...MISSION_POOL.easy,
+            ...MISSION_POOL.medium,
+            ...MISSION_POOL.hard
+        ];
+
+        // Mostrar las 3 misiones
+        this.activeMissions.forEach((mission, index) => {
+            const y = startY + (index * yIncrement);
+            const colors = difficultyColors[mission.difficulty];
+
+            // 1. Buscar la definición estática de la misión usando el 'id'
+            const missionDef = allMissionsPool.find(m => m.id === mission.id);
+            if (!missionDef) {
+                console.error("No se encontró la misión con ID:", mission.id);
+                return;
+            }
+
+            // 2. Elegir el texto del idioma actual
+            const missionText = (currentLanguage === 'es') ? missionDef.text_es : missionDef.text_en;
+
+            // 3. Mostrar el texto de la misión
+            this.add.text(this.scale.width / 2, y, missionText, { ...FONT_STYLE, fontSize: '22px' }).setOrigin(0.5);
+
+            // 4. Barra de Progreso (usa 'mission.progress' y 'mission.goal' del localStorage)
+            const progress = Math.min(mission.progress / mission.goal, 1.0);
+            const barWidth = this.scale.width * 0.7;
+            const barHeight = 30;
+
+            this.add.rectangle(this.scale.width / 2, y + 40, barWidth, barHeight)
+                .setStrokeStyle(2, colors.stroke)
+                .setFillStyle(0x000000, 0.5);
+            
+            if (progress > 0) {
+                this.add.rectangle(this.scale.width / 2 - (barWidth/2) + (barWidth * progress / 2), y + 40, barWidth * progress, barHeight)
+                    .setFillStyle(colors.fill, 1.0);
+            }
+            
+            this.add.text(this.scale.width / 2, y + 40, `${mission.progress} / ${mission.goal}`, { ...FONT_STYLE, fontSize: '18px' }).setOrigin(0.5);
+
+            // 5. Botón de Reclamar / Estado (sin cambios)
+            const buttonY = y + 95;
+            if (mission.claimed) {
+                this.add.text(this.scale.width / 2, buttonY, getText('missionComplete'), { ...FONT_STYLE, fontSize: '24px', fill: '#f3a800' }).setOrigin(0.5);
+            } else if (progress >= 1.0) {
+                createStyledButton(
+                    this,
+                    this.scale.width / 2, buttonY,
+                    `${getText('missionClaim')} (+${mission.reward})`,
+                    220, 50,
+                    0x004f27, 0x00b359,
+                    () => this.claimMission(mission, index)
+                );
+            } else {
+                this.add.text(this.scale.width / 2, buttonY, `+${mission.reward} Conchas`, { ...FONT_STYLE, fontSize: '20px', fill: '#aaaaaa' }).setOrigin(0.5);
+            }
+        });
+
+        // Botón Volver
+        createStyledButton(
+            this,
+            this.scale.width / 2, this.scale.height * 0.9, 
+            getText('backButton'), 
+            250, 60,
+            0x3d006b, 0x9d4bff,
+            () => { changeScene(this, 'MainMenuScene'); }
+        );
+    }
+
+    claimMission(mission, index) {
+        if (mission.claimed) return;
+
+        // 1. Marcar como reclamada
+        mission.claimed = true;
+        this.activeMissions[index] = mission;
+        localStorage.setItem('ascensoZenActiveMissions', JSON.stringify(this.activeMissions));
+
+        // 2. Añadir conchas
+        totalFichas += mission.reward;
+        localStorage.setItem('ascensoZenFichas', totalFichas);
+
+        playSfx(this, 'collect_sfx', { volume: 1.0 });
+
+        // 3. Reiniciar la escena para actualizar la UI
+        changeScene(this, 'MissionsScene');
+    }
+
+    update() { this.background.tilePositionY -= 0.5; }
+}
+
+
+// =================================================================
 // SCENE: GAME (MODIFICADA CON PROGRESIÓN)
 // =================================================================
 class GameScene extends Phaser.Scene {
@@ -871,21 +1089,23 @@ class GameScene extends Phaser.Scene {
         this.hasContinued = data.hasContinued || false;
         this.scoreMultiplier = 1;
 
-        // --- ✅ NUEVO: Variables de Dificultad ---
+        // --- Variables de Dificultad ---
         this.obstacleSpeed = 250; // Velocidad inicial de cangrejos
         this.fichaSpeed = 300;    // Velocidad inicial de conchas
         this.safeGap = 220;       // Tamaño inicial del hueco
         this.pufferFishHorizSpeed = 70; // Velocidad horizontal inicial del pez
-        // --- FIN NUEVO ---
 
-        // --- NUEVO: Variables de Power-Ups ---
+
         this.isShieldActive = false;
         this.isMagnetActive = false;
         this.magnetTimer = null;     // Para controlar la duración del imán
         this.shieldSprite = null;    // Para almacenar el sprite visual del escudo
         this.obstacleCollider = null; // Para guardar la referencia del collider de obstáculos
         this.pufferCollider = null;   // Para guardar la referencia del collider del pez globo
-        // --- FIN NUEVO ---
+
+        // --- ✅ NUEVO: Cargar misiones ---
+        this.activeMissions = JSON.parse(localStorage.getItem('ascensoZenActiveMissions') || '[]');
+       
     }
     // --- FIN MODIFICADO ---
 
@@ -1184,6 +1404,17 @@ class GameScene extends Phaser.Scene {
         ficha.destroy();
         this.fichas++;
         this.fichasText.setText(this.fichas);
+
+
+// --- ✅ NUEVO: Progreso de misión ---
+        this.activeMissions.forEach(mission => {
+            if (mission.type === 'COLLECT_SHELLS_SINGLE' && !mission.claimed) {
+                // El progreso de _SINGLE se actualiza en gameOver
+            } else if (mission.type === 'COLLECT_SHELLS_TOTAL' && !mission.claimed) {
+                mission.progress++; // Rastrea el total
+            }
+        });
+
     }
 
     // =================================================================
@@ -1278,8 +1509,16 @@ class GameScene extends Phaser.Scene {
         // Activa la función correspondiente
         if (type === 'shield') {
             this.activateShield();
+            // --- ✅ NUEVO: Progreso de misión ---
+            this.activeMissions.forEach(m => {
+                if (m.type === 'USE_SHIELD_TOTAL' && !m.claimed) m.progress++;
+            });
         } else if (type === 'magnet') {
             this.activateMagnet();
+            // --- ✅ NUEVO: Progreso de misión ---
+            this.activeMissions.forEach(m => {
+                if (m.type === 'USE_MAGNET_TOTAL' && !m.claimed) m.progress++;
+            });
         }
     }
 
@@ -1408,12 +1647,57 @@ class GameScene extends Phaser.Scene {
 
 
     gameOver() {
+
+
+        const finalScore = Math.floor(this.score * this.scoreMultiplier);
+        
+      this.activeMissions.forEach(mission => {
+            if (mission.claimed) return; // No actualizar si ya se reclamó
+
+            switch (mission.type) {
+                case 'PLAY_GAMES':
+                    mission.progress++;
+                    break;
+                case 'COLLECT_SHELLS_TOTAL':
+                    // El progreso ya se actualizó en collectFicha
+                    break;
+                case 'USE_SHIELD_TOTAL':
+                    // El progreso ya se actualizó en collectPowerUp
+                    break;
+                case 'USE_MAGNET_TOTAL':
+                    // El progreso ya se actualizó en collectPowerUp
+                    break;
+                case 'SCORE_POINTS_SINGLE':
+                    if (finalScore > mission.progress) {
+                        mission.progress = finalScore; // Guarda la mejor puntuación
+                    }
+                    break;
+                
+                // --- ¡NUEVA LÓGICA AQUÍ! ---
+                case 'SCORE_POINTS_TOTAL':
+                    mission.progress += finalScore; // Acumula el total
+                    break;
+                // --- FIN NUEVA LÓGICA ---
+
+                case 'COLLECT_SHELLS_SINGLE':
+                    if (this.fichas > mission.progress) {
+                        mission.progress = this.fichas; // Guarda la mejor recolecta
+                    }
+                    break;
+            }
+        });
+        
+        // Guardar todo el progreso actualizado en localStorage
+        localStorage.setItem('ascensoZenActiveMissions', JSON.stringify(this.activeMissions));
+        // --- FIN NUEVO ---
+
+        
         if (this.scoreTimer) this.scoreTimer.destroy();
         playSfx(this, 'gameover_sfx');
         this.physics.pause();
         this.player.setTint(0xff0000);
         this.cameras.main.shake(300, 0.01);
-        const finalScore = Math.floor(this.score * this.scoreMultiplier);
+
         if (finalScore > highscore) { 
             highscore = finalScore; 
             localStorage.setItem('ascensoZenHighscore', highscore); 
@@ -1741,9 +2025,9 @@ const config = {
     // --- ✅ MODIFICADO: Escalado FIT ---
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: 450, height: 800 },
     // --- ✅ MODIFICADO: debug activado ---
-    physics: { default: 'arcade', arcade: { debug: true } },
+    physics: { default: 'arcade', arcade: { debug: false } },
     // --- ✅ MODIFICADO: Añadidas OptionsScene y StoreScene ---
-    scene: [PreloaderScene, MainMenuScene, OptionsScene, StoreScene, GameScene, SecretScene, GameOverScene],
+    scene: [PreloaderScene, MainMenuScene, OptionsScene, StoreScene,MissionsScene, GameScene, SecretScene, GameOverScene],
     backgroundColor: '#0d0014'
 };
 
