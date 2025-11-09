@@ -74,7 +74,10 @@ const allStrings = {
         'missionClaim': 'RECLAMAR',
         'missionComplete': '¡COMPLETADO!',
         'unlockWithAd': 'VER ANUNCIO',
-        'missionRewardPending': (r) => `+${r} Conchas` 
+        'missionRewardPending': (r) => `+${r} Conchas` ,
+
+        'adForShellsButton': 'GRATIS +100 Conchas (Ver Anuncio)',
+        'adForShellsUsed': 'Recompensa diaria obtenida'
     },
     'en': {
         // MainMenuScene
@@ -148,7 +151,10 @@ const allStrings = {
         'missionClaim': 'CLAIM',
         'missionComplete': 'COMPLETED!',
         'unlockWithAd': 'WATCH AD',
-        'missionRewardPending': (r) => `+${r} Shells`
+        'missionRewardPending': (r) => `+${r} Shells`,
+
+        'adForShellsButton': 'FREE +100 Shells (Watch Ad)',
+        'adForShellsUsed': 'Daily reward claimed'
     }
 };
 // =================================================================
@@ -530,6 +536,7 @@ class PreloaderScene extends Phaser.Scene {
         // --- FIN MODIFICADO ---
 
         this.load.image('background_vertical', 'assets/background_vertical.png');
+        //this.load.image('background_deep', 'assets/background_deep.png'); // (Debes crear esta imagen)
         
         // --- ✅ MODIFICADO: Carga de todos los skins ---
         this.load.image('player_medusa', 'assets/medusa.png');
@@ -853,6 +860,9 @@ class StoreScene extends Phaser.Scene {
     create() {
         this.cameras.main.fadeIn(250, 0, 0, 0);
 
+        this.adForShellsButtonBg = null;
+        this.adForShellsButtonLabel = null;
+
         // --- ✅ NUEVO: Variables para el estado de los anuncios ---
         this.adListeners = [];
         this.isAdShowing = false;
@@ -861,7 +871,25 @@ class StoreScene extends Phaser.Scene {
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
         this.add.text(this.scale.width / 2, this.scale.height * 0.1, getText('storeTitle'), { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
 
-        this.fichasText = this.add.text(this.scale.width / 2, this.scale.height * 0.18, `${getText('shellsLabel')}${totalFichas}`, FONT_STYLE).setOrigin(0.5);
+        // 1. Definir la posición y el estilo
+        const panelY = this.scale.height * 0.18; // Misma altura que el texto original
+        const panelWidth = 170;
+        const panelHeight = 50;
+        const iconTextXOffset = 50;
+        const textStyle = { ...FONT_STYLE, fontSize: '28px', stroke: '#000', strokeThickness: 4 };
+
+        // 2. Fondo del panel (usamos los colores verdes de conchas del menú)
+        this.add.rectangle(this.scale.width / 2, panelY, panelWidth, panelHeight, 0x006b5e, 0.8)
+            .setStrokeStyle(3, 0x00f5d4);
+
+        // 3. Icono de la concha
+        this.add.image((this.scale.width / 2) - iconTextXOffset + 20, panelY, 'collectible_almeja')
+            .setScale(1.0)
+            .setOrigin(0.5);
+            
+        // 4. Texto con el total (¡IMPORTANTE: lo guardamos en this.fichasText!)
+        this.fichasText = this.add.text((this.scale.width / 2) + iconTextXOffset - 20, panelY, totalFichas, textStyle)
+            .setOrigin(0.5);
 
         // --- ✅ INICIO: MODIFICACIÓN DE ESTILO DE BOTONES ---
         const startY = this.scale.height * 0.3;
@@ -965,7 +993,39 @@ class StoreScene extends Phaser.Scene {
                 // --- FIN LÓGICA MODIFICADA ---
             }
         });
-        // --- FIN MODIFICADO ---
+
+            // 1. Comprobar si ya se ha usado hoy
+        const today = new Date().toDateString();
+        const lastUsedDate = localStorage.getItem('ascensoZenAdForShellsDate');
+        const isAlreadyUsedToday = (today === lastUsedDate);
+
+        // 2. Definir variables del botón
+        const buttonY = this.scale.height * 0.78;
+        const buttonText = isAlreadyUsedToday ? getText('adForShellsUsed') : getText('adForShellsButton');
+        const buttonColor = isAlreadyUsedToday ? colors.using.fill : colors.ad.fill; // color gris si usado
+        const buttonStroke = isAlreadyUsedToday ? colors.using.stroke : colors.ad.stroke; // borde gris si usado
+        const buttonClickHandler = isAlreadyUsedToday ? null : () => { this.showAdForShells(); }; // Sin click si usado
+
+        // 3. Crear el botón
+        const { bg, label } = createStyledButton(
+            this,
+            this.scale.width / 2, buttonY,
+            buttonText,
+            300, 55, // Ancho y alto
+            buttonColor, buttonStroke,
+            buttonClickHandler // Pasa el handler (o null si está deshabilitado)
+        );
+
+        // 4. Guardar referencias para deshabilitarlo en vivo
+        this.adForShellsButtonBg = bg;
+        this.adForShellsButtonLabel = label;
+
+        // 5. Aplicar estado deshabilitado si ya se usó
+        if (isAlreadyUsedToday) {
+            this.adForShellsButtonBg.disableInteractive(); // Lo hace no-clicable
+            this.adForShellsButtonBg.setAlpha(0.5); // Apariencia deshabilitada
+            this.adForShellsButtonLabel.setAlpha(0.5);
+        }
 
 
         // --- Botón Volver (con nuevo estilo global) ---
@@ -983,6 +1043,10 @@ class StoreScene extends Phaser.Scene {
         if (totalFichas >= COLOR_COST) {
             totalFichas -= COLOR_COST;
             localStorage.setItem('ascensoZenFichas', totalFichas);
+            
+            // --- ¡AÑADE ESTA LÍNEA AQUÍ! ---
+            this.fichasText.setText(totalFichas);
+            // --- FIN DE LÍNEA AÑADIDA ---
             
             unlockedSkins.push(index);
             localStorage.setItem('ascensoZenUnlockedSkins', JSON.stringify(unlockedSkins));
@@ -1103,7 +1167,90 @@ class StoreScene extends Phaser.Scene {
             cleanupAndResume(`Excepción: ${e.message}`);
         }
     }
+
+    /**
+     * ✅ NUEVA FUNCIÓN DE ANUNCIO PARA CONCHAS
+     */
+    async showAdForShells() {
+        if (this.isAdShowing) { return; }
+        
+        if (!adMobInitialized) {
+            console.error("AdMob no está listo.");
+            const errorText = this.add.text(this.scale.width / 2, this.scale.height / 2, getText('adError'), { ...FONT_STYLE, fontSize: '16px', fill: '#ff6961' }).setOrigin(0.5);
+            this.time.delayedCall(3000, () => errorText.destroy());
+            return;
+        }
+
+        this.isAdShowing = true;
+        
+        const { AdMob } = Capacitor.Plugins;
+        const adId = 'ca-app-pub-2165332859919251/3961845289'; // ID de anuncio recompensado
+        let isHandled = false;
+
+        const cleanupAndResume = (reason = "Razón desconocida") => {
+            if (isHandled) return;
+            isHandled = true;
+            console.log(`[AdManager] Limpiando. Razón: ${reason}`);
+            this.cleanupListeners();
+            this.hideAdLoadingUI();
+            this.isAdShowing = false;
+        };
+
+        this.showAdLoadingUI(() => cleanupAndResume("Usuario canceló manualmente"));
+
+        const dismissHandler = AdMob.addListener('admob:rewardedVideoAdDismissed', () => cleanupAndResume("Anuncio cerrado"));
+        const failShowHandler = AdMob.addListener('admob:rewardedVideoAdFailedToShow', (error) => cleanupAndResume(`Fallo al mostrar: ${JSON.stringify(error)}`));
+        this.adListeners.push(dismissHandler, failShowHandler);
+
+        try {
+            await AdMob.prepareRewardVideoAd({ adId, isTesting: true });
+            const rewardResult = await AdMob.showRewardVideoAd();
+            
+            if (isHandled) return;
+            
+            if (rewardResult && rewardResult.amount > 0) {
+                console.log('RECOMPENSA OBTENIDA, DANDO CONCHAS', rewardResult);
+                isHandled = true;
+                this.cleanupListeners();
+                this.hideAdLoadingUI();
+                
+                // --- ¡LA LÓGICA CLAVE DE RECOMPENSA! ---
+                const rewardAmount = 100; // O la cantidad que quieras
+                totalFichas += rewardAmount;
+                localStorage.setItem('ascensoZenFichas', totalFichas);
+                
+                playSfx(this, 'collect_sfx');
+                
+                // Actualizar el texto en pantalla
+                this.fichasText.setText(`${getText('shellsLabel')}${totalFichas}`);
+                
+                // --- NUEVO: Guardar fecha y deshabilitar botón ---
+                localStorage.setItem('ascensoZenAdForShellsDate', new Date().toDateString());
+                
+                if (this.adForShellsButtonBg) {
+                    this.adForShellsButtonBg.disableInteractive();
+                    this.adForShellsButtonBg.setAlpha(0.5);
+                    this.adForShellsButtonLabel.setText(getText('adForShellsUsed'));
+                    this.adForShellsButtonLabel.setAlpha(0.5);
+                }
+
+            } else {
+                cleanupAndResume("Anuncio visto pero sin recompensa");
+            }
+        } catch (e) {
+            console.error("ERROR en flujo de anuncio de conchas:", e);
+            cleanupAndResume(`Excepción: ${e.message}`);
+        }
+    }
+
+
+
+
 }
+
+
+
+
 
 
 
@@ -1251,11 +1398,64 @@ class GameScene extends Phaser.Scene {
         this.obstacleCollider = null; // Para guardar la referencia del collider de obstáculos
         this.pufferCollider = null;   // Para guardar la referencia del collider del pez globo
 
+        //Level deep
+        this.level2Triggered = false;
+
         // --- ✅ NUEVO: Cargar misiones ---
         this.activeMissions = JSON.parse(localStorage.getItem('ascensoZenActiveMissions') || '[]');
+        // Si estamos continuando, recalcula la dificultad AHORA
+        if (this.score > 0) {
+            this.calculateStartingDifficulty(this.score);
+        }
        
     }
-    // --- FIN MODIFICADO ---
+   // Añade esta nueva función dentro de la clase GameScene
+    calculateStartingDifficulty(startingScore) {
+        console.log(`Calculando dificultad inicial para ${startingScore} puntos.`);
+
+        const scoreSteps150 = Math.floor(startingScore / 150);
+        const scoreSteps300 = Math.floor(startingScore / 300);
+        const scoreSteps500 = Math.floor(startingScore / 500);
+
+        // 1. Aumentar Velocidades (lógica de 150 puntos)
+        this.obstacleSpeed = Math.min(1000, this.obstacleSpeed + (scoreSteps150 * 10));
+        this.fichaSpeed = Math.min(1000, this.fichaSpeed + (scoreSteps150 * 12));
+        this.pufferFishHorizSpeed = Math.min(300, this.pufferFishHorizSpeed + (scoreSteps150 * 8));
+
+        // 2. Aumentar Frecuencia (lógica de 300 puntos)
+        this.initialObstacleDelay = Math.max(800, this.initialObstacleDelay - (scoreSteps300 * 50));
+        this.initialPufferDelay = this.initialObstacleDelay * 1.5; // Mantener la proporción
+
+        // 3. Reducir Hueco (lógica de 500 puntos)
+        this.safeGap = Math.max(150, this.safeGap - (scoreSteps500 * 10));
+
+        console.log(`Dificultad calculada: Speed=${this.obstacleSpeed}, Gap=${this.safeGap}, Delay=${this.initialObstacleDelay}`);
+    }
+
+    setBackground(textureKey) {
+        if (!this.background) return; // Comprobación de seguridad
+        if (this.background.texture.key === textureKey) return; // Ya es esta textura
+
+        // 1. Cambia la textura del fondo
+        this.background.setTexture(textureKey);
+
+        // 2. Obtiene las dimensiones de la NUEVA imagen
+        const newTexture = this.textures.get(textureKey);
+        if (!newTexture || !newTexture.getSourceImage()) {
+            console.error("No se pudo encontrar la textura:", textureKey);
+            return; 
+        }
+
+        const imgWidth = newTexture.getSourceImage().width;
+        const imgHeight = newTexture.getSourceImage().height;
+
+        // 3. Calcula la escala necesaria para que quepa en la pantalla (450x800)
+        const scaleX = this.scale.width / imgWidth;   // Ej: 450 / 1080 = 0.416
+        const scaleY = this.scale.height / imgHeight; // Ej: 800 / 1920 = 0.416
+
+        // 4. Aplica esa escala AL MOSAICO (no al objeto)
+        this.background.setTileScale(scaleX, scaleY);
+    }
 
     create() {
         // --- ✅ MODIFICADO: FADE IN más rápido ---
@@ -1275,8 +1475,10 @@ class GameScene extends Phaser.Scene {
 
 
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
-        // this.obstacles = this.physics.add.group({ immovable: true, allowGravity: false }); // <-- Movido arriba
-        // this.fichasGroup = this.physics.add.group({ allowGravity: false }); // <-- Movido arriba
+       /*if (this.score >= 200) {
+            this.setBackground('background_deep'); // Llama a la nueva función
+            this.level2Triggered = true;
+        }*/
 
         // --- ✅ MODIFICADO: Carga el skin seleccionado ---
         const selectedSkinKey = PLAYER_SKINS[selectedSkinIndex];
@@ -1389,71 +1591,31 @@ class GameScene extends Phaser.Scene {
         }
         const trophyIcon = this.add.text(this.scale.width - 50, uiY, `🏆`, { fontSize: '28px' }).setOrigin(1, 0.5).setDepth(100);
         this.highscoreText = this.add.text(trophyIcon.x - trophyIcon.width - 5, uiY, `${highscore}`, uiStyle).setOrigin(1, 0.5).setDepth(100);
-        // --- FIN MODIFICADO ---
-
-        
-        // --- ✅ MODIFICADO: scoreTimer con lógica de progresión ---
-        this.scoreTimer = this.time.addEvent({ delay: 100, callback: () => {
-            this.score++;
-            const displayScore = Math.floor(this.score * this.scoreMultiplier);
-            this.scoreText.setText(displayScore);
-            this.scoreText.emit('updateText');
-            if (displayScore > highscore) {
-                this.highscoreText.setText(displayScore);
-                this.highscoreText.setFill('#f3a800');
-            }
-
-            // --- ✅ NUEVO: Lógica de Progresión de Dificultad (VERSIÓN DE PRUEBA RÁPIDA) ---
-            // Cada 150 puntos (Inicio suave, pero se nota)
-            if (this.score > 0 && this.score % 150 === 0) { 
-                this.obstacleSpeed = Math.min(1000, this.obstacleSpeed + 10); 
-                this.fichaSpeed = Math.min(1000, this.fichaSpeed + 12); 
-                this.pufferFishHorizSpeed = Math.min(300, this.pufferFishHorizSpeed + 8);
-                console.log("DIFICULTAD: Velocidad aumentada:", this.obstacleSpeed);
-            }
-
-            // Cada 300 puntos (El siguiente escalón)
-            if (this.score > 0 && this.score % 300 === 0) { 
-                const newDelay = Math.max(800, this.obstacleTimer.delay - 50); 
-                this.obstacleTimer.delay = newDelay;
-
-                // 🔹 Actualizar también el delay del pez globo para mantener la proporción
-                const newPufferDelay = newDelay * 1.5;
-                this.pufferFishTimer.delay = newPufferDelay;
-
-                console.log("DIFICULTAD: Frecuencia aumentada, nuevo delay:", newDelay);
-                console.log("DIFICULTAD: PufferFish sincronizado, nuevo delay:", newPufferDelay);
-            }
-
-
-            // Cada 500 puntos (El primer gran hito)
-            if (this.score > 0 && this.score % 500 === 0) { 
-                this.safeGap = Math.max(150, this.safeGap - 10); 
-                console.log("DIFICULTAD: Hueco reducido:", this.safeGap);
-            }
-            // --- FIN NUEVO ---
-
-        }, loop: true });
-        // --- FIN MODIFICADO ---
-
-        // --- ✅ MODIFICADO: Guardado en this.obstacleTimer ---
-        this.obstacleTimer = this.time.addEvent({ delay: 1500, callback: this.addObstacleRow, callbackScope: this, loop: true });
-        // --- FIN MODIFICADO ---
-
-        this.time.addEvent({ delay: 3100, callback: this.addFicha, callbackScope: this, loop: true });
     
-        // Aparece cada 2250ms (1.5 veces el delay de los cangrejos)
-        this.pufferFishTimer = this.time.addEvent({ 
-            delay: 7500, 
-            startAt: 3750,
-            callback: this.spawnPatrollerPufferFish, // Usamos una nueva función
+  // 1. CREA LOS TIMERS QUE SERÁN MODIFICADOS PRIMERO
+        this.obstacleTimer = this.time.addEvent({ 
+            delay: 1500, // O usa this.initialObstacleDelay si implementaste la mejora
+            callback: this.addObstacleRow, 
             callbackScope: this, 
             loop: true 
         });
-        // --- FIN DEL NUEVO TIMER ---
 
-        // --- NUEVO: Timer para Power-Ups ---
-        // Aparece cada 15 segundos (empezando a los 7.5s)
+        this.pufferFishTimer = this.time.addEvent({ 
+            delay: 7500, // O usa this.initialPufferDelay si implementaste la mejora
+            startAt: 3750,
+            callback: this.spawnPatrollerPufferFish, 
+            callbackScope: this, 
+            loop: true 
+        });
+
+        // 2. CREA LOS OTROS TIMERS (FICHA, POWERUP)
+        this.time.addEvent({ 
+            delay: 3100, 
+            callback: this.addFicha, 
+            callbackScope: this, 
+            loop: true 
+        });
+    
         this.powerUpTimer = this.time.addEvent({ 
             delay: 15000, 
             startAt: 7500,
@@ -1461,7 +1623,51 @@ class GameScene extends Phaser.Scene {
             callbackScope: this, 
             loop: true 
         });
-        // --- FIN NUEVO ---
+
+        // 3. AHORA, CREA EL SCORETIMER (QUE MODIFICA A LOS OTROS)
+        // Mueve el bloque entero de this.scoreTimer aquí al final.
+        this.scoreTimer = this.time.addEvent({ 
+            delay: 100, 
+            callback: () => {
+                this.score++;
+                const displayScore = Math.floor(this.score * this.scoreMultiplier);
+                this.scoreText.setText(displayScore);
+                this.scoreText.emit('updateText');
+                if (displayScore > highscore) {
+                    this.highscoreText.setText(displayScore);
+                    this.highscoreText.setFill('#f3a800');
+                }
+                /*if (displayScore >= 200 && !this.level2Triggered) {
+                    this.level2Triggered = true;
+                    this.setBackground('background_deep'); // Llama a la nueva función
+                }*/
+
+                // --- Lógica de Progresión de Dificultad ---
+                if (this.score > 0 && this.score % 150 === 0) { 
+                    this.obstacleSpeed = Math.min(1000, this.obstacleSpeed + 10); 
+                    this.fichaSpeed = Math.min(1000, this.fichaSpeed + 12); 
+                    this.pufferFishHorizSpeed = Math.min(300, this.pufferFishHorizSpeed + 8);
+                }
+
+                // AHORA ESTO ES SEGURO, porque this.obstacleTimer ya existe
+                if (this.score > 0 && this.score % 300 === 0) { 
+                    const newDelay = Math.max(800, this.obstacleTimer.delay - 50); 
+                    this.obstacleTimer.delay = newDelay;
+                    this.obstacleTimer.elapsed = 0; // Resetea el tiempo transcurrido
+
+                    const newPufferDelay = newDelay * 1.5;
+                    this.pufferFishTimer.delay = newPufferDelay;
+                    this.pufferFishTimer.elapsed = 0; // Resetea el tiempo transcurrido
+                }
+
+                if (this.score > 0 && this.score % 500 === 0) { 
+                    this.safeGap = Math.max(150, this.safeGap - 10); 
+                }
+                // --- Fin Lógica de Progresión ---
+
+            }, 
+            loop: true 
+        });
     }
     update() {
         this.background.tilePositionY -= 1.0;
