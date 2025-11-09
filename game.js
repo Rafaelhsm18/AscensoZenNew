@@ -62,9 +62,9 @@ const allStrings = {
         'endButton': 'TERMINAR',
         'maxScoreLabel': 'Máximo: ',
         'menuButton': 'MENÚ PRINCIPAL',
-        'bonusButton': (c) => `Bonus x1.2 Próxima Partida (${c} Conchas)`,
+        'bonusButton': (c) => `JUGAR + Bonus x1.2 (${c})`, 
         'bonusActive': '¡Bonus Activado!',
-        'bonusNeeds': (c) => `Bonus x1.2 (Necesitas ${c})`,
+        'bonusNeeds': (c) => `Jugar + Bonus (Req: ${c})`, 
         'loadingAd': 'Cargando anuncio...',
         'cancelButton': 'CANCELAR',
         'adError': 'Publicidad no disponible ahora.'
@@ -129,9 +129,9 @@ const allStrings = {
         'endButton': 'FINISH',
         'maxScoreLabel': 'Max Score: ',
         'menuButton': 'MAIN MENU',
-        'bonusButton': (c) => `x1.2 Bonus Next Game (${c} Shells)`,
+        'bonusButton': (c) => `PLAY + x1.2 Bonus (${c})`, 
         'bonusActive': 'Bonus Activated!',
-        'bonusNeeds': (c) => `x1.2 Bonus (Needs ${c})`,
+        'bonusNeeds': (c) => `Play + Bonus (Req: ${c})`,
         'loadingAd': 'Loading ad...',
         'cancelButton': 'CANCEL',
         'adError': 'Ads not available right now.'
@@ -212,7 +212,69 @@ function applyButtonTweens(scene, button, onClickCallback) {
         });
     });
 }
-// --- FIN NUEVO ---
+/**
+ * ✅ NUEVA FUNCIÓN GLOBAL DE BOTONES
+ * Crea un botón estilizado profesional (rectángulo + texto).
+ * @param {Phaser.Scene} scene - La escena actual (this).
+ * @param {number} x - Posición X del centro.
+ * @param {number} y - Posición Y del centro.
+ * @param {string} text - El texto a mostrar.
+ * @param {number} width - Ancho del botón.
+ * @param {number} height - Alto del botón.
+ * @param {number} color - Color de relleno (hex, ej. 0x3d006b).
+ * @param {number} stroke - Color de borde (hex, ej. 0x9d4bff).
+ * @param {Function} [onClick] - La función callback para el clic.
+ */
+function createStyledButton(scene, x, y, text, width, height, color, stroke, onClick) {
+    
+    // 1. El fondo del botón
+    const bg = scene.add.rectangle(x, y, width, height, color, 0.8)
+        .setStrokeStyle(4, stroke)
+        .setAlpha(0.9);
+
+    // 2. El texto del botón
+    const label = scene.add.text(x, y, text, { 
+        ...FONT_STYLE, 
+        // Ajusta el tamaño de fuente al 45% de la altura del botón
+        fontSize: `${Math.floor(height * 0.45)}px`, 
+        shadow: { offsetX: 2, offsetY: 2, color: '#000000', blur: 3, fill: true }
+    }).setOrigin(0.5);
+
+    // 3. Interacción
+    bg.setInteractive();
+
+    // 4. Hover
+    bg.on('pointerover', () => {
+        scene.tweens.add({ targets: [bg, label], scale: 1.05, duration: 150, ease: 'Quad.easeOut' });
+        bg.setAlpha(1.0);
+    });
+    bg.on('pointerout', () => {
+        scene.tweens.add({ targets: [bg, label], scale: 1.0, duration: 150, ease: 'Quad.easeOut' });
+        bg.setAlpha(0.9);
+    });
+
+    // 5. Click
+    bg.on('pointerdown', () => {
+        playSfx(scene, 'click_sfx');
+        scene.tweens.add({ 
+            targets: [bg, label], 
+            scale: 0.95, 
+            duration: 100, 
+            yoyo: true, 
+            ease: 'Quad.easeOut',
+            onComplete: () => {
+                // Resetea escala
+                bg.setScale(1.0);
+                label.setScale(1.0);
+                // Llama al callback si existe
+                if (onClick) onClick();
+            }
+        });
+    });
+
+    // Devuelve los objetos creados por si la escena necesita manipularlos
+    return { bg, label };
+}
 
 
 // =================================================================
@@ -395,6 +457,11 @@ class PreloaderScene extends Phaser.Scene {
         this.load.audio('click_sfx', 'audio/click.wav');
         this.load.audio('impulse_sfx', 'audio/impulso.mp3');
         this.load.image('obstacle_pezglobo', 'assets/pezglobo.png');
+
+        // --- NUEVO: Cargar el asset del power-up ---
+        this.load.image('powerup_shield', 'assets/powerup_escudo.png');
+        this.load.image('iman_powerUp', 'assets/iman_powerUp.png');
+        // --- FIN NUEVO ---
     }
 }
 
@@ -406,7 +473,7 @@ class MainMenuScene extends Phaser.Scene {
     create() {
         // --- ✅ MODIFICADO: FADE IN más rápido ---
         this.cameras.main.fadeIn(250, 0, 0, 0);
-        // --- FIN MODIFICADO ---
+     
 
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
         highscore = localStorage.getItem('ascensoZenHighscore') || 0;
@@ -417,37 +484,62 @@ class MainMenuScene extends Phaser.Scene {
         const gradient = title.context.createLinearGradient(0, 0, 0, title.height);
         gradient.addColorStop(0, '#87CEEB'); gradient.addColorStop(1, '#00BFFF');
         title.setFill(gradient);
-        // --- FIN MODIFICADO ---
 
-        // --- ✅ MODIFICADO: Botones de Menú (Reajustados) ---
-        const buttonYStart = this.scale.height * 0.38; // Subido (antes 0.40)
-        const buttonSpacing = this.scale.height * 0.10; // Más junto (antes 0.11)
+const buttonYStart = this.scale.height * 0.40;
+        const buttonSpacing = 85;
+        const mainButtonWidth = this.scale.width * 0.65;
+        const mainButtonHeight = 65;
+        const secondaryButtonWidth = this.scale.width * 0.55;
+        const secondaryButtonHeight = 55;
 
-        // Botón Jugar - MODIFICADO
-        const playButton = this.add.text(this.scale.width / 2, buttonYStart, getText('playButton'), { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
-        applyButtonTweens(this, playButton, () => {
-            changeScene(this, 'GameScene', { score: 0, fichas: 0, hasContinued: false });
-        });
+        // Botón Jugar (Principal)
+        createStyledButton(
+            this, // <-- Pasamos la escena
+            this.scale.width / 2, 
+            buttonYStart, 
+            getText('playButton'), 
+            mainButtonWidth, 
+            mainButtonHeight, 
+            0x3d006b, 0x9d4bff, 
+            () => { changeScene(this, 'GameScene', { score: 0, fichas: 0, hasContinued: false }); }
+        );
 
-        // Botón Secreto - MODIFICADO
-        const secretButton = this.add.text(this.scale.width / 2, buttonYStart + buttonSpacing, getText('secretButton'), { ...FONT_STYLE, fontSize: '26px', backgroundColor: '#a88f00', padding: { x: 15, y: 8 } }).setOrigin(0.5).setInteractive();
-        applyButtonTweens(this, secretButton, () => {
-            changeScene(this, 'SecretScene');
-        });
+        // Botón Secreto (Secundario)
+        createStyledButton(
+            this, // <-- Pasamos la escena
+            this.scale.width / 2, 
+            buttonYStart + buttonSpacing, 
+            getText('secretButton'), 
+            secondaryButtonWidth, 
+            secondaryButtonHeight, 
+            0xa88f00, 0xffe042, 
+            () => { changeScene(this, 'SecretScene'); }
+        );
 
+        // Botón Tienda (Secundario)
+        createStyledButton(
+            this, // <-- Pasamos la escena
+            this.scale.width / 2, 
+            buttonYStart + buttonSpacing * 2, 
+            getText('storeButton'), 
+            secondaryButtonWidth, 
+            secondaryButtonHeight, 
+            0x006b5e, 0x00f5d4, 
+            () => { changeScene(this, 'StoreScene'); }
+        );
 
-        // Botón Tienda (NUEVO) - MODIFICADO
-        const storeButton = this.add.text(this.scale.width / 2, buttonYStart + buttonSpacing * 2, getText('storeButton'), { ...FONT_STYLE, fontSize: '26px', backgroundColor: '#006b5e', padding: { x: 15, y: 8 } }).setOrigin(0.5).setInteractive();
-        applyButtonTweens(this, storeButton, () => {
-            changeScene(this, 'StoreScene');
-        });
-
-        // Botón Opciones - MODIFICADO
-        const optionsButton = this.add.text(this.scale.width / 2, buttonYStart + buttonSpacing * 3, getText('optionsButton'), { ...FONT_STYLE, fontSize: '26px', backgroundColor: '#4a4a4a', padding: { x: 15, y: 8 } }).setOrigin(0.5).setInteractive();
-        applyButtonTweens(this, optionsButton, () => {
-            changeScene(this, 'OptionsScene');
-        });
-        // --- FIN MODIFICADO ---
+        // Botón Opciones (Secundario)
+        createStyledButton(
+            this, // <-- Pasamos la escena
+            this.scale.width / 2, 
+            buttonYStart + buttonSpacing * 3, 
+            getText('optionsButton'), 
+            secondaryButtonWidth, 
+            secondaryButtonHeight, 
+            0x4a4a4a, 0xb5b5b5, 
+            () => { changeScene(this, 'OptionsScene'); }
+        );
+        
 
         // Textos de puntuación (Reajustados) - MODIFICADO
         this.add.text(this.scale.width / 2, this.scale.height - 100, `${getText('highScoreLabel')}${highscore}`, FONT_STYLE).setOrigin(0.5);
@@ -463,76 +555,107 @@ class MainMenuScene extends Phaser.Scene {
 class OptionsScene extends Phaser.Scene {
     constructor() { super('OptionsScene'); }
     
-    create() {
-        // --- ✅ MODIFICADO: FADE IN más rápido ---
+   create() {
         this.cameras.main.fadeIn(250, 0, 0, 0);
-        // --- FIN MODIFICADO ---
 
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
         this.add.text(this.scale.width / 2, this.scale.height * 0.15, getText('optionsTitle'), { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
 
-        const buttonStyle = { ...FONT_STYLE, fontSize: '20px', padding: { x: 10, y: 5 } };
-        const buttonSpacing = 120;
+        // --- ✅ INICIO: MODIFICACIÓN DE ANCHO DE BOTONES ---
+        
+        // --- NUEVOS ANCHOS ---
+        const volumeBtnWidth = 100; // Ancho para botones de Volumen (OFF, BAJO, NORMAL)
+        const langBtnWidth = 130;   // Ancho para botones de Idioma (Español, English)
+        
+        const toggleBtnHeight = 50;
+        const toggleBtnFontSize = '20px';
+        const buttonSpacing = 120; // Espaciado para botones de volumen
 
-        // --- Controles de Música ---
+        /**
+         * Función de ayuda interna para crear los botones de palanca
+         * --- AHORA ACEPTA 'width' ---
+         */
+        const createToggleBtn = (x, y, text, width, color, stroke) => {
+            const bg = this.add.rectangle(x, y, width, toggleBtnHeight, color, 0.8) // Usa el 'width' pasado
+                .setStrokeStyle(4, stroke)
+                .setAlpha(0.6); // Empieza atenuado
+            
+            const label = this.add.text(x, y, text, { ...FONT_STYLE, fontSize: toggleBtnFontSize })
+                .setOrigin(0.5)
+                .setAlpha(0.6); // Texto también atenuado
+
+            bg.setInteractive();
+            return { bg, label };
+        };
+
+        // --- Controles de Música (con 'volumeBtnWidth') ---
         this.add.text(this.scale.width / 2, this.scale.height * 0.30, getText('musicLabel'), FONT_STYLE).setOrigin(0.5);
         const musicButtonY = this.scale.height * 0.37;
         
-        this.musicButtonOff = this.add.text(this.scale.width / 2 - buttonSpacing, musicButtonY, getText('volumeOff'), { ...buttonStyle, backgroundColor: '#8b0000' }).setOrigin(0.5).setInteractive();
-        this.musicButtonLow = this.add.text(this.scale.width / 2, musicButtonY, getText('volumeLow'), { ...buttonStyle, backgroundColor: '#a88f00' }).setOrigin(0.5).setInteractive();
-        this.musicButtonNormal = this.add.text(this.scale.width / 2 + buttonSpacing, musicButtonY, getText('volumeNormal'), { ...buttonStyle, backgroundColor: '#004f27' }).setOrigin(0.5).setInteractive();
+        let btn;
+        btn = createToggleBtn(this.scale.width / 2 - buttonSpacing, musicButtonY, getText('volumeOff'), volumeBtnWidth, 0x8b0000, 0xff6b6b);
+        this.musicButtonOff = { bg: btn.bg, label: btn.label };
+        applyButtonTweens(this, btn.bg, () => this.updateMusicVolume(MUSIC_VOLUME_LEVELS.OFF));
 
-        applyButtonTweens(this, this.musicButtonOff, () => this.updateMusicVolume(MUSIC_VOLUME_LEVELS.OFF));
-        applyButtonTweens(this, this.musicButtonLow, () => this.updateMusicVolume(MUSIC_VOLUME_LEVELS.BAJO));
-        applyButtonTweens(this, this.musicButtonNormal, () => this.updateMusicVolume(MUSIC_VOLUME_LEVELS.NORMAL));
+        btn = createToggleBtn(this.scale.width / 2, musicButtonY, getText('volumeLow'), volumeBtnWidth, 0xa88f00, 0xffe042);
+        this.musicButtonLow = { bg: btn.bg, label: btn.label };
+        applyButtonTweens(this, btn.bg, () => this.updateMusicVolume(MUSIC_VOLUME_LEVELS.BAJO));
 
-        // --- Controles de Efectos (SFX) ---
+        btn = createToggleBtn(this.scale.width / 2 + buttonSpacing, musicButtonY, getText('volumeNormal'), volumeBtnWidth, 0x004f27, 0x00b359);
+        this.musicButtonNormal = { bg: btn.bg, label: btn.label };
+        applyButtonTweens(this, btn.bg, () => this.updateMusicVolume(MUSIC_VOLUME_LEVELS.NORMAL));
+
+        // --- Controles de Efectos (SFX) (con 'volumeBtnWidth') ---
         this.add.text(this.scale.width / 2, this.scale.height * 0.50, getText('sfxLabel'), FONT_STYLE).setOrigin(0.5);
         const sfxButtonY = this.scale.height * 0.57;
 
-        this.sfxButtonOff = this.add.text(this.scale.width / 2 - buttonSpacing, sfxButtonY, getText('volumeOff'), { ...buttonStyle, backgroundColor: '#8b0000' }).setOrigin(0.5).setInteractive();
-        this.sfxButtonLow = this.add.text(this.scale.width / 2, sfxButtonY, getText('volumeLow'), { ...buttonStyle, backgroundColor: '#a88f00' }).setOrigin(0.5).setInteractive();
-        this.sfxButtonNormal = this.add.text(this.scale.width / 2 + buttonSpacing, sfxButtonY, getText('volumeNormal'), { ...buttonStyle, backgroundColor: '#004f27' }).setOrigin(0.5).setInteractive();
+        btn = createToggleBtn(this.scale.width / 2 - buttonSpacing, sfxButtonY, getText('volumeOff'), volumeBtnWidth, 0x8b0000, 0xff6b6b);
+        this.sfxButtonOff = { bg: btn.bg, label: btn.label };
+        applyButtonTweens(this, btn.bg, () => this.updateSfxVolume(SFX_VOLUME_LEVELS.OFF));
 
-        applyButtonTweens(this, this.sfxButtonOff, () => this.updateSfxVolume(SFX_VOLUME_LEVELS.OFF));
-        applyButtonTweens(this, this.sfxButtonLow, () => this.updateSfxVolume(SFX_VOLUME_LEVELS.BAJO));
-        applyButtonTweens(this, this.sfxButtonNormal, () => this.updateSfxVolume(SFX_VOLUME_LEVELS.NORMAL));
+        btn = createToggleBtn(this.scale.width / 2, sfxButtonY, getText('volumeLow'), volumeBtnWidth, 0xa88f00, 0xffe042);
+        this.sfxButtonLow = { bg: btn.bg, label: btn.label };
+        applyButtonTweens(this, btn.bg, () => this.updateSfxVolume(SFX_VOLUME_LEVELS.BAJO));
 
-        // --- Controles de Idioma --- (NUEVO)
+        btn = createToggleBtn(this.scale.width / 2 + buttonSpacing, sfxButtonY, getText('volumeNormal'), volumeBtnWidth, 0x004f27, 0x00b359);
+        this.sfxButtonNormal = { bg: btn.bg, label: btn.label };
+        applyButtonTweens(this, btn.bg, () => this.updateSfxVolume(SFX_VOLUME_LEVELS.NORMAL));
+
+        // --- Controles de Idioma (con 'langBtnWidth') ---
         this.add.text(this.scale.width / 2, this.scale.height * 0.70, getText('languageLabel'), FONT_STYLE).setOrigin(0.5);
         const langButtonY = this.scale.height * 0.77;
 
-        this.langButtonES = this.add.text(this.scale.width / 2 - 80, langButtonY, 'Español', { ...buttonStyle, backgroundColor: '#004f27' }).setOrigin(0.5).setInteractive();
-        this.langButtonEN = this.add.text(this.scale.width / 2 + 80, langButtonY, 'English', { ...buttonStyle, backgroundColor: '#004f27' }).setOrigin(0.5).setInteractive();
+        btn = createToggleBtn(this.scale.width / 2 - 80, langButtonY, 'Español', langBtnWidth, 0x004f27, 0x00b359);
+        this.langButtonES = { bg: btn.bg, label: btn.label };
+        applyButtonTweens(this, btn.bg, () => this.updateLanguage('es'));
 
-        applyButtonTweens(this, this.langButtonES, () => this.updateLanguage('es'));
-        applyButtonTweens(this, this.langButtonEN, () => this.updateLanguage('en'));
-        // --- Fin Idioma ---
+        btn = createToggleBtn(this.scale.width / 2 + 80, langButtonY, 'English', langBtnWidth, 0x004f27, 0x00b359);
+        this.langButtonEN = { bg: btn.bg, label: btn.label };
+        applyButtonTweens(this, btn.bg, () => this.updateLanguage('en'));
+        
+        // --- Botón Volver (usando la función global) ---
+        createStyledButton(
+            this,
+            this.scale.width / 2, this.scale.height * 0.9, 
+            getText('backButton'), 
+            250, 60, // Ancho y alto
+            0x3d006b, 0x9d4bff, // Colores
+            () => { changeScene(this, 'MainMenuScene'); }
+        );
+        // --- ✅ FIN: MODIFICACIÓN DE ANCHO ---
 
-
-        // --- Botón Volver ---
-        const backButton = this.add.text(this.scale.width / 2, this.scale.height * 0.9, getText('backButton'), { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
-        applyButtonTweens(this, backButton, () => {
-            changeScene(this, 'MainMenuScene');
-        });
-
-
-        this.updateVolumeHighlights(); // Marcar botones activos al inicio
-        this.updateLanguageHighlights(); // Marcar idioma
+        this.updateVolumeHighlights();
+        this.updateLanguageHighlights();
     }
 
     updateMusicVolume(newVolume) {
-        // playSfx(this, 'click_sfx'); // Sonido ya se reproduce en el tween
         musicVolume = newVolume;
         localStorage.setItem('ascensoZenMusicVolume', musicVolume.toString());
 
         if (music) {
             music.setVolume(musicVolume);
-            if (musicVolume > 0 && !music.isPlaying) {
-                music.play();
-            } else if (musicVolume === 0 && music.isPlaying) {
-                music.stop();
-            }
+            if (musicVolume > 0 && !music.isPlaying) music.play();
+            else if (musicVolume === 0 && music.isPlaying) music.stop();
         }
         this.updateVolumeHighlights();
     }
@@ -540,51 +663,41 @@ class OptionsScene extends Phaser.Scene {
     updateSfxVolume(newVolume) {
         sfxVolume = newVolume;
         localStorage.setItem('ascensoZenSfxVolume', sfxVolume.toString());
-        // playSfx(this, 'click_sfx'); // Sonido ya se reproduce en el tween
         this.updateVolumeHighlights();
-        // Reproduce un sonido de prueba con el *nuevo* volumen *después* de la animación
         this.time.delayedCall(110, () => playSfx(this, 'click_sfx'));
     }
 
-    // --- NUEVA FUNCIÓN ---
     updateLanguage(lang) {
         currentLanguage = lang;
         localStorage.setItem('ascensoZenLanguage', lang);
-        // playSfx(this, 'click_sfx'); // Sonido ya se reproduce en el tween
-        
-        // Importante: Reiniciar la escena para aplicar los cambios de texto
-        // Usamos changeScene para que sea suave
         changeScene(this, 'OptionsScene');
     }
 
-    // --- NUEVA FUNCIÓN ---
+    // --- ✅ MODIFICADO: updateHighlights para manejar {bg, label} ---
     updateLanguageHighlights() {
-        // Resetea idioma
-        this.langButtonES.setAlpha(0.6);
-        this.langButtonEN.setAlpha(0.6);
-        // Destaca idioma
-        if (currentLanguage === 'es') this.langButtonES.setAlpha(1.0);
-        else if (currentLanguage === 'en') this.langButtonEN.setAlpha(1.0);
+        [this.langButtonES, this.langButtonEN].forEach(btn => {
+            btn.bg.setAlpha(0.6); btn.label.setAlpha(0.6);
+        });
+        
+        if (currentLanguage === 'es') {
+            this.langButtonES.bg.setAlpha(1.0); this.langButtonES.label.setAlpha(1.0);
+        } else if (currentLanguage === 'en') {
+            this.langButtonEN.bg.setAlpha(1.0); this.langButtonEN.label.setAlpha(1.0);
+        }
     }
 
     updateVolumeHighlights() {
-        // Resetea música
-        this.musicButtonOff.setAlpha(0.6);
-        this.musicButtonLow.setAlpha(0.6);
-        this.musicButtonNormal.setAlpha(0.6);
-        // Destaca música
-        if (musicVolume === MUSIC_VOLUME_LEVELS.OFF) this.musicButtonOff.setAlpha(1.0);
-        else if (musicVolume === MUSIC_VOLUME_LEVELS.BAJO) this.musicButtonLow.setAlpha(1.0);
-        else if (musicVolume === MUSIC_VOLUME_LEVELS.NORMAL) this.musicButtonNormal.setAlpha(1.0);
+        [this.musicButtonOff, this.musicButtonLow, this.musicButtonNormal, this.sfxButtonOff, this.sfxButtonLow, this.sfxButtonNormal].forEach(btn => {
+            btn.bg.setAlpha(0.6); btn.label.setAlpha(0.6);
+        });
 
-        // Resetea SFX
-        this.sfxButtonOff.setAlpha(0.6);
-        this.sfxButtonLow.setAlpha(0.6);
-        this.sfxButtonNormal.setAlpha(0.6);
-        // Destaca SFX
-        if (sfxVolume === SFX_VOLUME_LEVELS.OFF) this.sfxButtonOff.setAlpha(1.0);
-        else if (sfxVolume === SFX_VOLUME_LEVELS.BAJO) this.sfxButtonLow.setAlpha(1.0);
-        else if (sfxVolume === SFX_VOLUME_LEVELS.NORMAL) this.sfxButtonNormal.setAlpha(1.0);
+        if (musicVolume === MUSIC_VOLUME_LEVELS.OFF) { this.musicButtonOff.bg.setAlpha(1.0); this.musicButtonOff.label.setAlpha(1.0); }
+        else if (musicVolume === MUSIC_VOLUME_LEVELS.BAJO) { this.musicButtonLow.bg.setAlpha(1.0); this.musicButtonLow.label.setAlpha(1.0); }
+        else if (musicVolume === MUSIC_VOLUME_LEVELS.NORMAL) { this.musicButtonNormal.bg.setAlpha(1.0); this.musicButtonNormal.label.setAlpha(1.0); }
+
+        if (sfxVolume === SFX_VOLUME_LEVELS.OFF) { this.sfxButtonOff.bg.setAlpha(1.0); this.sfxButtonOff.label.setAlpha(1.0); }
+        else if (sfxVolume === SFX_VOLUME_LEVELS.BAJO) { this.sfxButtonLow.bg.setAlpha(1.0); this.sfxButtonLow.label.setAlpha(1.0); }
+        else if (sfxVolume === SFX_VOLUME_LEVELS.NORMAL) { this.sfxButtonNormal.bg.setAlpha(1.0); this.sfxButtonNormal.label.setAlpha(1.0); }
     }
     
     update() { this.background.tilePositionY -= 0.5; }
@@ -607,13 +720,24 @@ class StoreScene extends Phaser.Scene {
         // Mostrar conchas actuales - MODIFICADO
         this.fichasText = this.add.text(this.scale.width / 2, this.scale.height * 0.18, `${getText('shellsLabel')}${totalFichas}`, FONT_STYLE).setOrigin(0.5);
 
-        // --- ✅ MODIFICADO: Grid de Skins ---
+      // --- ✅ INICIO: MODIFICACIÓN DE ESTILO DE BOTONES ---
+
         const startY = this.scale.height * 0.3;
         const yIncrement = 120;
-        const buyButtonStyle = { ...FONT_STYLE, fontSize: '18px', backgroundColor: '#004f27', padding: { x: 10, y: 5 } };
+        
+        // --- Estilos para los botones internos ---
+        const btnWidth = 140;
+        const btnHeight = 45;
+        const btnFontSize = '18px';
+        
+        // Colores para cada estado
+        const colors = {
+            buy: { fill: 0x004f27, stroke: 0x00b359 },
+            select: { fill: 0x004a6b, stroke: 0x00a2f5 },
+            using: { fill: 0x4a4a4a, stroke: 0xb5b5b5 }
+        };
 
-        // Ajusta esta X si tienes más de 3 skins. 
-        // Para 3 skins, los centramos.
+        // --- Grid de Skins ---
         const positions = [
             { x: this.scale.width / 2, y: startY },
             { x: this.scale.width / 2, y: startY + yIncrement },
@@ -636,39 +760,69 @@ class StoreScene extends Phaser.Scene {
             
             if (isUnlocked) {
                 if (isSelected) {
-                    border.setStrokeStyle(6, 0xf3a800); // Borde dorado si está seleccionado
-                    this.add.text(x, y + 55, getText('usingLabel'), { ...FONT_STYLE, fontSize: '16px', fill: '#f3a800' }).setOrigin(0.5);
+                    // --- ESTADO USANDO ---
+                    border.setStrokeStyle(6, 0xf3a800);
+                    const usingBg = this.add.rectangle(x, y + 55, btnWidth, btnHeight, colors.using.fill, 0.8)
+                        .setStrokeStyle(2, colors.using.stroke);
+                    const usingLabel = this.add.text(x, y + 55, getText('usingLabel'), { ...FONT_STYLE, fontSize: btnFontSize })
+                        .setOrigin(0.5);
+                    // Hacemos que el fondo y borde destaquen
+                    usingBg.setAlpha(1.0);
+                    usingLabel.setAlpha(1.0);
+
                 } else {
-                    // Si está desbloqueado pero no seleccionado, hacerlo clickeable
+                    // --- ESTADO ELEGIR ---
+                    const selectBg = this.add.rectangle(x, y + 55, btnWidth, btnHeight, colors.select.fill, 0.8)
+                        .setStrokeStyle(2, colors.select.stroke)
+                        .setAlpha(0.9)
+                        .setInteractive();
+                        
+                    const selectLabel = this.add.text(x, y + 55, getText('selectLabel'), { ...FONT_STYLE, fontSize: btnFontSize })
+                        .setOrigin(0.5)
+                        .setAlpha(0.9);
+
+                    // Hacemos el swatch (la imagen) también clickeable
                     swatch.setInteractive().on('pointerdown', () => this.selectSkin(index));
-                    // Aplicar tweens al swatch
                     swatch.on('pointerover', () => swatch.setAlpha(0.8));
                     swatch.on('pointerout', () => swatch.setAlpha(1.0));
-
-                    this.add.text(x, y + 55, getText('selectLabel'), { ...FONT_STYLE, fontSize: '16px' }).setOrigin(0.5);
+                    
+                    // Aplicamos el tween al fondo del botón
+                    applyButtonTweens(this, selectBg, () => this.selectSkin(index));
                 }
             } else {
-                // Bloqueado
+                // --- ESTADO COMPRAR ---
                 swatch.setAlpha(0.3);
                 border.setAlpha(0.3);
-                const buyButton = this.add.text(x, y + 55, `(${COLOR_COST})`, buyButtonStyle).setOrigin(0.5);
                 
-                if (totalFichas >= COLOR_COST) {
-                    buyButton.setInteractive();
-                    applyButtonTweens(this, buyButton, () => this.buySkin(index));
-                } else {
-                    buyButton.setAlpha(0.5); // Gris si no puede comprar
+                const canAfford = totalFichas >= COLOR_COST;
+                const currentColors = canAfford ? colors.buy : colors.using; // Reusamos gris si no puede
+
+                const buyBg = this.add.rectangle(x, y + 55, btnWidth, btnHeight, currentColors.fill, 0.8)
+                    .setStrokeStyle(2, currentColors.stroke)
+                    .setAlpha(canAfford ? 0.9 : 0.5); // Atenuado si no puede comprar
+
+                const buyLabel = this.add.text(x, y + 55, `(${COLOR_COST})`, { ...FONT_STYLE, fontSize: btnFontSize })
+                    .setOrigin(0.5)
+                    .setAlpha(canAfford ? 0.9 : 0.5);
+
+                if (canAfford) {
+                    buyBg.setInteractive();
+                    applyButtonTweens(this, buyBg, () => this.buySkin(index));
                 }
             }
         });
         // --- FIN MODIFICADO ---
 
 
-        // --- Botón Volver ---
-        const backButton = this.add.text(this.scale.width / 2, this.scale.height * 0.9, getText('backButton'), { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
-        applyButtonTweens(this, backButton, () => {
-            changeScene(this, 'MainMenuScene');
-        });
+        // --- Botón Volver (con nuevo estilo global) ---
+        createStyledButton(
+            this,
+            this.scale.width / 2, this.scale.height * 0.9, 
+            getText('backButton'), 
+            250, 60, // Ancho y alto
+            0x3d006b, 0x9d4bff, // Colores
+            () => { changeScene(this, 'MainMenuScene'); }
+        );
     }
 
     // --- ✅ MODIFICADO: Renombrado de 'Color' a 'Skin' ---
@@ -723,6 +877,15 @@ class GameScene extends Phaser.Scene {
         this.safeGap = 220;       // Tamaño inicial del hueco
         this.pufferFishHorizSpeed = 70; // Velocidad horizontal inicial del pez
         // --- FIN NUEVO ---
+
+        // --- NUEVO: Variables de Power-Ups ---
+        this.isShieldActive = false;
+        this.isMagnetActive = false;
+        this.magnetTimer = null;     // Para controlar la duración del imán
+        this.shieldSprite = null;    // Para almacenar el sprite visual del escudo
+        this.obstacleCollider = null; // Para guardar la referencia del collider de obstáculos
+        this.pufferCollider = null;   // Para guardar la referencia del collider del pez globo
+        // --- FIN NUEVO ---
     }
     // --- FIN MODIFICADO ---
 
@@ -733,18 +896,25 @@ class GameScene extends Phaser.Scene {
         this.cameras.main.fadeIn(fadeInDuration, 0, 0, 0);
         // --- FIN MODIFICADO ---
 
-        // --- ✅ NUEVO: Grupo para el pez globo ---
+        // --- ✅ MODIFICADO: Referencias de Colliders ---
         this.obstacles = this.physics.add.group({ immovable: true, allowGravity: false });
-        this.pufferFishGroup = this.physics.add.group({ immovable: true, allowGravity: false }); // <-- AÑADE ESTA LÍNEA
+        this.pufferFishGroup = this.physics.add.group({ immovable: true, allowGravity: false });
+        this.fichasGroup = this.physics.add.group({ allowGravity: false });
+
+        // --- NUEVO: Grupo de Power-Ups ---
+        this.powerUpsGroup = this.physics.add.group({ allowGravity: false });
+        // --- FIN NUEVO ---
 
 
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
-        this.obstacles = this.physics.add.group({ immovable: true, allowGravity: false });
-        this.fichasGroup = this.physics.add.group({ allowGravity: false });
+        // this.obstacles = this.physics.add.group({ immovable: true, allowGravity: false }); // <-- Movido arriba
+        // this.fichasGroup = this.physics.add.group({ allowGravity: false }); // <-- Movido arriba
 
         // --- ✅ MODIFICADO: Carga el skin seleccionado ---
         const selectedSkinKey = PLAYER_SKINS[selectedSkinIndex];
         this.player = this.physics.add.sprite(this.scale.width / 2, this.scale.height * 0.8, selectedSkinKey);
+
+        this.playerHomeY = this.player.y; // <-- arreglo bug eempujar medusa
 
         // --- ✅ SOLUCIÓN: Establece el tamaño base ---
         this.player.setDisplaySize(70, 70);
@@ -754,10 +924,17 @@ class GameScene extends Phaser.Scene {
         const baseScaleY = this.player.scaleY;
         // --- FIN SOLUCIÓN ---
 
-        // --- ✅ MODIFICADO: Hitbox del jugador ajustada ---
-        this.player.body.setSize(50, 40).setAllowGravity(false); // Antes 48x48
+        this.player.body.setSize(50, 40).setAllowGravity(false);
         // --- FIN MODIFICADO ---
         this.player.setCollideWorldBounds(true).setDepth(10);
+
+        // --- NUEVO: Añadir sprite de escudo al jugador (oculto) ---
+        // Lo creamos aquí para reusarlo. Se adjuntará al jugador en el update.
+        this.shieldSprite = this.add.image(this.player.x, this.player.y, 'powerup_shield')
+            .setDepth(11)     // Encima del jugador (depth 10)
+            .setDisplaySize(30, 30) // <-- CAMBIO AQUÍ (antes setScale(1.5))
+            .setVisible(false);
+        // --- FIN NUEVO ---
 
         // --- ✅ MODIFICADO: La animación ahora usa la escala base ---
         this.tweens.add({
@@ -805,27 +982,32 @@ class GameScene extends Phaser.Scene {
         // --- FIN MODIFICADO ---
 
      
-        this.anims.create({ key: 'crab_pinch', frames: [ { key: 'obstacle_cangrejo' }, { key: 'cangrejo_cerrado' } ], frameRate: 2, repeat: -1 });
-        
-        this.input.on('pointerdown', () => { 
-            playSfx(this, 'impulse_sfx', { volume: 0.05 }); 
-        });
+        if (!this.anims.exists('crab_pinch')) {
+            this.anims.create({ key: 'crab_pinch', frames: [ { key: 'obstacle_cangrejo' }, { key: 'cangrejo_cerrado' } ], frameRate: 2, repeat: -1 });
+        }
+        // this.input.on('pointerdown', () => {  // <-- Movido arriba
+        //     playSfx(this, 'impulse_sfx', { volume: 0.05 }); 
+        // });
 
         if (this.hasContinued) {
             this.player.setAlpha(0.5);
-            this.time.delayedCall(2000, () => { this.player.setAlpha(1.0); this.physics.add.collider(this.player, this.obstacles, this.gameOver, null, this); 
-                // --- ✅ NUEVO: Collider para el pez globo ---
-                this.physics.add.collider(this.player, this.pufferFishGroup, this.gameOver, null, this); // <-- AÑADE ESTA LÍNEA
-                // --- FIN NUEVO --
-
+            this.time.delayedCall(2000, () => { this.player.setAlpha(1.0); 
+                // --- MODIFICADO: Usar el nuevo manejador de colisión ---
+                this.obstacleCollider = this.physics.add.collider(this.player, this.obstacles, this.handleObstacleCollision, null, this);
+                this.pufferCollider = this.physics.add.collider(this.player, this.pufferFishGroup, this.handleObstacleCollision, null, this);
+                // --- FIN MODIFICADO ---
             });
         } else {
-            this.physics.add.collider(this.player, this.obstacles, this.gameOver, null, this);
-            // --- ✅ NUEVO: Collider para el pez globo ---
-            this.physics.add.collider(this.player, this.pufferFishGroup, this.gameOver, null, this); // <-- AÑADE ESTA LÍNEA
-            // --- FIN NUEVO ---
+            // --- MODIFICADO: Usar el nuevo manejador de colisión ---
+            this.obstacleCollider = this.physics.add.collider(this.player, this.obstacles, this.handleObstacleCollision, null, this);
+            this.pufferCollider = this.physics.add.collider(this.player, this.pufferFishGroup, this.handleObstacleCollision, null, this);
+            // --- FIN MODIFICADO ---
         }
         this.physics.add.overlap(this.player, this.fichasGroup, this.collectFicha, null, this);
+        
+        // --- NUEVO: Collider para Power-Ups ---
+        this.physics.add.overlap(this.player, this.powerUpsGroup, this.collectPowerUp, null, this);
+        // --- FIN NUEVO ---
         
         // --- ✅ MODIFICADO: UI REPOSICIONADA ---
         const uiY = 55; // Antes 35
@@ -901,13 +1083,37 @@ class GameScene extends Phaser.Scene {
             loop: true 
         });
         // --- FIN DEL NUEVO TIMER ---
+
+        // --- NUEVO: Timer para Power-Ups ---
+        // Aparece cada 15 segundos (empezando a los 7.5s)
+        this.powerUpTimer = this.time.addEvent({ 
+            delay: 15000, 
+            startAt: 7500,
+            callback: this.spawnPowerUp,
+            callbackScope: this, 
+            loop: true 
+        });
+        // --- FIN NUEVO ---
     }
     update() {
         this.background.tilePositionY -= 1.0;
+
+        // --- NUEVO: Lógica de Power-Ups en Update ---
+        // 1. El escudo sigue al jugador
+        if (this.isShieldActive && this.shieldSprite) {
+            this.shieldSprite.setPosition(this.player.x, this.player.y);
+        }
+
+        // 2. El imán atrae conchas
+        if (this.isMagnetActive) {
+            this.attractFichas();
+        }
+        // --- FIN NUEVO ---
+
+
         if (this.input.activePointer.isDown) { this.player.body.velocity.x = 280; } else { this.player.body.velocity.x = -280; }
     }
 
-    // --- ✅ MODIFICADO: addObstacleRow() ---
    addObstacleRow() {
         // Usa this.safeGap en lugar del valor fijo 220
         const gap = this.safeGap; 
@@ -916,13 +1122,10 @@ class GameScene extends Phaser.Scene {
         for (let x = position + gap / 2 + 48 / 2; x < this.scale.width; x += 48) { this.createCrab(x, -50); }
     }
 
-
-    // --- ✅ MODIFICADO: createCrab() ---
     createCrab(x, y) {
         const crab = this.obstacles.create(x, y, 'obstacle_cangrejo');
         // --- ✅ MODIFICADO: Hitbox del cangrejo ajustada ---
-        crab.body.setSize(48, 25); // Antes 48x25
-        // --- FIN MODIFICADO ---
+        crab.body.setSize(48, 25); 
         crab.body.velocity.y = this.obstacleSpeed;
         crab.setDepth(10);
         this.time.delayedCall(Phaser.Math.Between(0, 500), () => { if (crab.active) { crab.play('crab_pinch'); } });
@@ -947,8 +1150,8 @@ class GameScene extends Phaser.Scene {
         // 4. CREAR EL PEZ
         const pufferFish = this.pufferFishGroup.create(x_spawn, y_spawn, 'obstacle_pezglobo');
         
-        pufferFish.setDisplaySize(100, 100); 
-        pufferFish.body.setSize(100, 100);
+       pufferFish.setDisplaySize(60, 60); // <-- CAMBIO AQUÍ (Antes 100, 100)
+        pufferFish.refreshBody();
         pufferFish.setDepth(5); 
 
         // 5. LANZAR EL PEZ
@@ -982,6 +1185,228 @@ class GameScene extends Phaser.Scene {
         this.fichas++;
         this.fichasText.setText(this.fichas);
     }
+
+    // =================================================================
+    // --- INICIO: NUEVAS FUNCIONES DE POWER-UP ---
+    // =================================================================
+
+    /**
+     * Hace que las fichas (conchas) cercanas sean atraídas por el jugador.
+     * Se llama desde update() cuando this.isMagnetActive es true.
+     */
+    attractFichas() {
+        const magnetRadius = 300;    // Radio de atracción
+        const attractionSpeed = 1000; // Velocidad de atracción
+        
+        this.fichasGroup.getChildren().forEach(ficha => {
+            if (!ficha.active) return;
+            
+            const distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, ficha.x, ficha.y);
+            
+            // Si la ficha está dentro del radio
+            if (distance < magnetRadius) {
+                // Usamos accelerateToObject para "tirar" de la concha hacia el jugador
+                // Esto se suma a su velocidad de caída normal.
+                this.physics.accelerateToObject(ficha, this.player, attractionSpeed, 300, 400);
+            }
+        });
+    }
+
+    /**
+     * Crea un power-up (escudo o imán) en la parte superior.
+     * Se llama desde this.powerUpTimer.
+     */
+    spawnPowerUp() {
+        const x = Phaser.Math.Between(50, this.scale.width - 50);
+        const y = -50;
+        
+        // 50% de probabilidad de escudo, 50% de imán
+        const type = Phaser.Math.Between(0, 1) === 0 ? 'shield' : 'magnet';
+        
+        let powerUp;
+        
+       if (type === 'shield') {
+            powerUp = this.powerUpsGroup.create(x, y, 'powerup_shield');
+            powerUp.setDisplaySize(50, 50);
+            powerUp.refreshBody(); // <-- ¡CAMBIO AQUÍ!
+            powerUp.setData('type', 'shield');
+            powerUp.setVisible(true);
+        } else {
+            powerUp = this.powerUpsGroup.create(x, y, 'iman_powerUp');
+            powerUp.setData('type', 'magnet');
+            powerUp.setDisplaySize(50, 50); 
+            powerUp.refreshBody(); // <-- ¡CAMBIO AQUÍ!
+            powerUp.setVisible(true);
+        }
+        
+        // Cae un poco más lento que las conchas para dar tiempo a verlo
+        powerUp.body.velocity.y = this.fichaSpeed * 0.8;
+        powerUp.setDepth(11); // Encima de los obstáculos
+
+        // Animación de rotación suave
+        this.tweens.add({ targets: powerUp, angle: Phaser.Math.Between(0, 1) ? 360 : -360, duration: 4000, repeat: -1 });
+
+        // Autodestrucción si sale de la pantalla
+        this.time.delayedCall(5000, () => { 
+            if (powerUp.active) powerUp.destroy(); 
+        });
+    }
+
+    /**
+     * Se llama cuando el jugador toca un power-up.
+     */
+    collectPowerUp(player, powerUp) {
+        const type = powerUp.getData('type');
+        
+        // Sonido de recolección (puedes cambiarlo por uno nuevo)
+        playSfx(this, 'collect_sfx', { volume: 1.0 });
+
+        // Efecto visual de partículas
+        const particleTint = (type === 'shield') ? 0x00bfff : 0xffff00; // Azules o Amarillas
+        const emitter = this.add.particles(powerUp.x, powerUp.y, 'particle', { 
+            speed: { min: -150, max: 150 }, 
+            angle: { min: 0, max: 360 }, 
+            scale: { start: 0.2, end: 0 }, 
+            blendMode: 'ADD', 
+            lifespan: 600, 
+            tint: particleTint
+        });
+        emitter.explode(20);
+
+        powerUp.destroy();
+
+        // Activa la función correspondiente
+        if (type === 'shield') {
+            this.activateShield();
+        } else if (type === 'magnet') {
+            this.activateMagnet();
+        }
+    }
+
+    /**
+     * Activa el power-up de escudo.
+     */
+    activateShield() {
+        if (this.isShieldActive) return; // No acumular
+
+        this.isShieldActive = true;
+
+        this.tweens.killTweensOf(this.shieldSprite);
+        // Posiciona el sprite del escudo (creado en create()) y lo hace visible
+        this.shieldSprite.setPosition(this.player.x, this.player.y).setVisible(true).setAlpha(0).setDisplaySize(30, 30);;
+
+        // Animación de aparición
+        this.tweens.add({
+            targets: this.shieldSprite,
+            alpha: 1.0,
+            //scale: 1.5,
+            duration: 300,
+            ease: 'Quad.easeOut'
+        });
+    }
+
+    /**
+     * Activa el power-up de imán durante 20 segundos.
+     */
+    activateMagnet() {
+        // Si ya hay un imán activo, simplemente reinicia el timer
+        if (this.magnetTimer) {
+            this.magnetTimer.remove();
+        }
+
+        this.isMagnetActive = true;
+        // Tinte visual en el jugador para saber que está activo
+        this.player.setTint(0x00bfff); 
+
+        // Timer de 20 segundos
+        this.magnetTimer = this.time.delayedCall(20000, () => {
+            this.isMagnetActive = false;
+            this.player.clearTint();
+            this.magnetTimer = null;
+        }, [], this);
+    }
+
+
+    /**
+     * NUEVO MANEJADOR DE COLISIÓN.
+     * Se llama cuando el jugador choca con un obstáculo o pez globo.
+     * Decide si el escudo se activa o si es game over.
+     */
+    handleObstacleCollision(player, obstacle) {
+        // Si el jugador no está activo (ya muriendo), no hacer nada
+        if (!player.active) return;
+
+        if (this.isShieldActive) {
+
+            player.setY(this.playerHomeY);
+            player.body.setVelocityY(0); // <-- AÑADE ESTA LÍNEA
+            // --- 1. EL ESCUDO ABSORBE EL GOLPE ---
+            this.isShieldActive = false; // El escudo se gasta
+            
+            // --- NUEVO: Detener animaciones anteriores ---
+            this.tweens.killTweensOf(this.shieldSprite);
+
+            // --- CAMBIO: Animar con displayWidth/Height ---
+            // Animación de rotura de escudo
+            this.tweens.add({
+                targets: this.shieldSprite,
+                alpha: 0,
+                displayWidth: 150,  // Crecer a 150px
+                displayHeight: 150, // Crecer a 150px
+                angle: Phaser.Math.Between(-90, 90),
+                duration: 200,
+                ease: 'Quad.easeIn',
+                onComplete: () => {
+                    // Resetea el sprite para la próxima vez
+                    this.shieldSprite.setVisible(false)
+                                 .setDisplaySize(100, 100) // Resetear tamaño
+                                 .setAngle(0)
+                                 .setAlpha(1.0); // Resetear alpha (no importa, está invisible)
+                }
+            });
+
+            // Sonido de rotura (reusamos 'gameover' pero más suave)
+            playSfx(this, 'gameover_sfx', { volume: 0.4 });
+
+            // Destruye el obstáculo
+            obstacle.destroy();
+
+            // --- 2. INMUNIDAD TEMPORAL (0.5 segundos) ---
+            // Desactiva temporalmente los colliders para evitar golpes seguidos
+            if (this.obstacleCollider) this.physics.world.removeCollider(this.obstacleCollider);
+            if (this.pufferCollider) this.physics.world.removeCollider(this.pufferCollider);
+
+            // Haz al jugador semitransparente para feedback visual
+            player.setAlpha(0.5);
+
+            // Reactiva los colliders y la opacidad después de 0.5s
+            this.time.delayedCall(500, () => {
+                if (!player.active) return; // Comprueba si el jugador sigue vivo
+                player.setAlpha(1.0);
+                player.setY(this.playerHomeY); 
+                player.body.setVelocityY(0);
+                // Reactiva los colliders
+                this.obstacleCollider = this.physics.add.collider(this.player, this.obstacles, this.handleObstacleCollision, null, this);
+                this.pufferCollider = this.physics.add.collider(this.player, this.pufferFishGroup, this.handleObstacleCollision, null, this);
+            });
+
+        } else {
+            // --- 3. NO HAY ESCUDO: GAME OVER ---
+            
+            // Desactiva colliders para evitar llamadas múltiples a gameOver
+            if (this.obstacleCollider) this.physics.world.removeCollider(this.obstacleCollider);
+            if (this.pufferCollider) this.physics.world.removeCollider(this.pufferCollider);
+            
+            // Llama a la lógica original de fin de partida
+            this.gameOver();
+        }
+    }
+
+    // =================================================================
+    // --- FIN: NUEVAS FUNCIONES DE POWER-UP ---
+    // =================================================================
+
+
     gameOver() {
         if (this.scoreTimer) this.scoreTimer.destroy();
         playSfx(this, 'gameover_sfx');
@@ -1023,9 +1448,9 @@ class GameScene extends Phaser.Scene {
 class SecretScene extends Phaser.Scene {
     constructor() { super('SecretScene'); }
     create() {
-        // --- ✅ MODIFICADO: FADE IN más rápido ---
+        // ---FADE IN más rápido ---
         this.cameras.main.fadeIn(250, 0, 0, 0);
-        // --- FIN MODIFICADO ---
+       
 
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
         this.add.text(this.scale.width / 2, this.scale.height * 0.1, getText('secretTitle'), { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
@@ -1037,14 +1462,17 @@ class SecretScene extends Phaser.Scene {
         for (let i = 0; i < SECRET_MESSAGE.length; i++) {
             revealedMessage += (i < unlockedCount) ? (SECRET_MESSAGE[i] + ' ') : '??? ';
         }
-        // --- FIN MODIFICADO ---
+        
 
         this.add.text(this.scale.width / 2, this.scale.height / 2, revealedMessage, { ...FONT_STYLE, fontSize: '28px', align: 'center', wordWrap: { width: this.scale.width * 0.9 } }).setOrigin(0.5);
-        const backButton = this.add.text(this.scale.width / 2, this.scale.height * 0.9, getText('backButton'), { ...FONT_STYLE, fontSize: '32px', backgroundColor: '#3d006b', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive();
-        
-        applyButtonTweens(this, backButton, () => {
-            changeScene(this, 'MainMenuScene');
-        });
+      createStyledButton(
+            this,
+            this.scale.width / 2, this.scale.height * 0.9, 
+            getText('backButton'), 
+            250, 60, // Ancho y alto
+            0x3d006b, 0x9d4bff, // Colores
+            () => { changeScene(this, 'MainMenuScene'); }
+        );
     }
     update() { this.background.tilePositionY -= 0.5; }
 }
@@ -1062,15 +1490,14 @@ class GameOverScene extends Phaser.Scene {
         this.isAdShowing = false;
         this.adListeners = []; 
         this.adLoadingUI = null; // Grupo para los elementos de la UI de carga
+// --- ✅ NUEVO: Para guardar referencias a los botones ---
+        this.continueButtons = [];
     }
     
     create() {
-        // --- ✅ MODIFICADO: FADE IN más rápido ---
         this.cameras.main.fadeIn(250, 0, 0, 0);
-        // --- FIN MODIFICADO ---
 
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
-        // MODIFICADO
         this.add.text(this.scale.width / 2, this.scale.height * 0.2, getText('gameOverTitle'), { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
         this.add.text(this.scale.width / 2, this.scale.height * 0.28, `${getText('scoreLabel')}${this.score}`, FONT_STYLE).setOrigin(0.5);
         this.add.text(this.scale.width / 2, this.scale.height * 0.35, `${getText('collectedLabel')}${this.fichas}`, FONT_STYLE).setOrigin(0.5);
@@ -1086,80 +1513,130 @@ class GameOverScene extends Phaser.Scene {
 
     update() { if (!this.isAdShowing) this.background.tilePositionY -= 0.5; }
     
+    // --- ✅ MODIFICADO: createContinueOptions ---
     createContinueOptions() {
-        this.continueWithCoinsButton = null;
+        this.continueButtons = []; // Resetea el array
+        let btnObjects;
+
+        const btnWidth = this.scale.width * 0.7;
+        const btnHeight = 55;
+
+        // Botón Continuar con Monedas
         if (totalFichas >= CONTINUE_COST) {
-            // MODIFICADO
-            this.continueWithCoinsButton = this.add.text(this.scale.width / 2, this.scale.height * 0.6, getText('continueCost', CONTINUE_COST), { ...FONT_STYLE, fontSize: '22px', backgroundColor: '#004f27', padding: { x: 15, y: 10 } }).setOrigin(0.5).setInteractive();
-            applyButtonTweens(this, this.continueWithCoinsButton, () => {
-                totalFichas -= CONTINUE_COST; 
-                localStorage.setItem('ascensoZenFichas', totalFichas); 
-                changeScene(this, 'GameScene', { score: this.score, fichas: 0, hasContinued: true });
-            });
+            btnObjects = createStyledButton(
+                this,
+                this.scale.width / 2, this.scale.height * 0.6, 
+                getText('continueCost', CONTINUE_COST),
+                btnWidth, btnHeight,
+                0x004f27, 0x00b359,
+                () => {
+                    totalFichas -= CONTINUE_COST; 
+                    localStorage.setItem('ascensoZenFichas', totalFichas); 
+                    changeScene(this, 'GameScene', { score: this.score, fichas: 0, hasContinued: true });
+                }
+            );
+            this.continueButtons.push(btnObjects.bg, btnObjects.label);
         }
         
-        // MODIFICADO
-        this.adButton = this.add.text(this.scale.width / 2, this.scale.height * 0.75, getText('continueAd'), { ...FONT_STYLE, fontSize: '22px', backgroundColor: '#a88f00', padding: { x: 15, y: 10 } }).setOrigin(0.5).setInteractive();
-        applyButtonTweens(this, this.adButton, () => {
-             this.showAdAndContinue();
-        });
+        // Botón Continuar con Anuncio
+        btnObjects = createStyledButton(
+            this,
+            this.scale.width / 2, this.scale.height * 0.72, // Ajuste de Y
+            getText('continueAd'),
+            btnWidth, btnHeight,
+            0xa88f00, 0xffe042,
+            () => { this.showAdAndContinue(); }
+        );
+        this.continueButtons.push(btnObjects.bg, btnObjects.label);
 
-
-        // MODIFICADO
-        this.endButton = this.add.text(this.scale.width / 2, this.scale.height * 0.9, getText('endButton'), { ...FONT_STYLE, fontSize: '18px' }).setOrigin(0.5).setInteractive();
-        applyButtonTweens(this, this.endButton, () => {
-            if (this.continueWithCoinsButton) this.continueWithCoinsButton.destroy();
-            this.adButton.destroy();
-            this.endButton.destroy();
-            this.createEndGameButtons();
-        });
+        // Botón Terminar
+        btnObjects = createStyledButton(
+            this,
+            this.scale.width / 2, this.scale.height * 0.84, // Ajuste de Y
+            getText('endButton'),
+            btnWidth * 0.8, btnHeight * 0.9, // Más pequeño
+            0x4a4a4a, 0xb5b5b5,
+            () => {
+                // Destruye los botones de continuar
+                this.continueButtons.forEach(obj => obj.destroy());
+                this.createEndGameButtons(); // Muestra los botones finales
+            }
+        );
+        // Añade también el botón "Terminar" para que se autodestruya
+        this.continueButtons.push(btnObjects.bg, btnObjects.label);
     }
 
-    createEndGameButtons() {
-        // MODIFICADO
+  createEndGameButtons() {
         this.add.text(this.scale.width / 2, this.scale.height * 0.55, `${getText('maxScoreLabel')}${highscore}`, { ...FONT_STYLE, fill: '#f3a800' }).setOrigin(0.5);
-        const menuButton = this.add.text(this.scale.width / 2, this.scale.height * 0.68, getText('menuButton'), { ...FONT_STYLE, fontSize: '28px', backgroundColor: '#3d006b', padding: { x: 15, y: 10 } }).setOrigin(0.5).setInteractive();
-        applyButtonTweens(this, menuButton, () => {
-            changeScene(this, 'MainMenuScene');
-        });
 
-        
         const rewardCost = 100;
-        // MODIFICADO
-        const rewardButton = this.add.text(this.scale.width / 2, this.scale.height * 0.82, getText('bonusButton', rewardCost), { ...FONT_STYLE, fontSize: '18px', align: 'center', backgroundColor: '#004f27', padding: { x: 10, y: 5 } }).setOrigin(0.5);
-        if (totalFichas >= rewardCost) {
-            rewardButton.setInteractive()
-            applyButtonTweens(this, rewardButton, () => {
-                totalFichas -= rewardCost; 
-                localStorage.setItem('ascensoZenFichas', totalFichas);
-                localStorage.setItem('ascensoZenBonusActive', 'true');
-                rewardButton.setText(getText('bonusActive')).disableInteractive().setStyle({ backgroundColor: '#333' }); 
-            });
-        } else { 
-            rewardButton.setText(getText('bonusNeeds', rewardCost)).setAlpha(0.5); 
+        const canAfford = totalFichas >= rewardCost;
+
+        // --- 1. Botón JUGAR CON BONUS (AHORA ES EL PRINCIPAL) ---
+        
+        const btnText = canAfford ? getText('bonusButton', rewardCost) : getText('bonusNeeds', rewardCost);
+        const btnColor = canAfford ? 0x004f27 : 0x4a4a4a; // Verde si puede, gris si no
+        const btnStroke = canAfford ? 0x00b359 : 0xb5b5b5;
+
+        // Posición Principal (arriba y grande)
+        const { bg, label } = createStyledButton(
+            this,
+            this.scale.width / 2, this.scale.height * 0.68, // Posición principal
+            btnText,
+            this.scale.width * 0.7, 60, // Botón grande
+            btnColor, btnStroke,
+            () => {
+                // Esta función de clic SOLO se ejecuta si se puede pagar
+                if (canAfford) {
+                    totalFichas -= rewardCost; 
+                    localStorage.setItem('ascensoZenFichas', totalFichas);
+                    localStorage.setItem('ascensoZenBonusActive', 'true');
+                    
+                    // --- ¡LA NUEVA ACCIÓN! ---
+                    // Inicia una nueva partida con score 0
+                    changeScene(this, 'GameScene', { score: 0, fichas: 0, hasContinued: false });
+                }
+            }
+        );
+
+        // Si no puede pagar, deshabilitar
+        if (!canAfford) {
+            bg.disableInteractive().setAlpha(0.5);
+            label.setAlpha(0.5);
         }
+
+        // --- 2. Botón Menú Principal (AHORA ES EL SECUNDARIO) ---
+        createStyledButton(
+            this,
+            this.scale.width / 2, this.scale.height * 0.82, // Posición secundaria
+            getText('menuButton'),
+            this.scale.width * 0.7, 50, // Botón más pequeño
+            0x3d006b, 0x9d4bff, // Color de menú
+            () => { changeScene(this, 'MainMenuScene'); }
+        );
     }
 
-    // --- Interfaz de Carga de Anuncio ---
+    // --- Interfaz de Carga de Anuncio (Con botones nuevos) ---
     showAdLoadingUI(onCancel) {
         this.adLoadingUI = this.add.group();
         
         const overlay = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.7).setOrigin(0,0);
-        overlay.setInteractive(); // Bloquea los clics a lo que esté debajo
+        overlay.setInteractive();
         
-        // MODIFICADO
         const loadingText = this.add.text(this.scale.width / 2, this.scale.height / 2 - 50, getText('loadingAd'), FONT_STYLE).setOrigin(0.5);
         
-        // MODIFICADO
-        const cancelButton = this.add.text(this.scale.width / 2, this.scale.height / 2 + 50, getText('cancelButton'), { ...FONT_STYLE, fontSize: '22px', backgroundColor: '#8b0000', padding: { x: 15, y: 10 } }).setOrigin(0.5);
-        cancelButton.setInteractive();
-        applyButtonTweens(this, cancelButton, () => {
-            onCancel();
-        });
+        // Botón Cancelar con nuevo estilo
+        const { bg, label } = createStyledButton(
+            this,
+            this.scale.width / 2, this.scale.height / 2 + 50,
+            getText('cancelButton'),
+            200, 50,
+            0x8b0000, 0xff6b6b,
+            () => { onCancel(); }
+        );
 
-
-        this.adLoadingUI.addMultiple([overlay, loadingText, cancelButton]);
-        this.adLoadingUI.setDepth(200); // Asegura que esté por encima de todo
+        this.adLoadingUI.addMultiple([overlay, loadingText, bg, label]);
+        this.adLoadingUI.setDepth(200);
     }
 
     hideAdLoadingUI() {
