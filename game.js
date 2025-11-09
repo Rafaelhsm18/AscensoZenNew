@@ -73,6 +73,8 @@ const allStrings = {
         'missionsTitle': 'Misiones Diarias',
         'missionClaim': 'RECLAMAR',
         'missionComplete': '¡COMPLETADO!',
+        'unlockWithAd': 'VER ANUNCIO',
+        'missionRewardPending': (r) => `+${r} Conchas` 
     },
     'en': {
         // MainMenuScene
@@ -145,6 +147,8 @@ const allStrings = {
         'missionsTitle': 'Daily Missions',
         'missionClaim': 'CLAIM',
         'missionComplete': 'COMPLETED!',
+        'unlockWithAd': 'WATCH AD',
+        'missionRewardPending': (r) => `+${r} Shells`
     }
 };
 // =================================================================
@@ -641,14 +645,51 @@ class MainMenuScene extends Phaser.Scene {
         // --- FIN DEL ARREGLO ---
         
 
-        // Textos de puntuación (Reajustados) - MODIFICADO
-        this.add.text(this.scale.width / 2, this.scale.height - 100, `${getText('highScoreLabel')}${highscore}`, FONT_STYLE).setOrigin(0.5);
-        this.add.text(this.scale.width / 2, this.scale.height - 50, `${getText('totalShellsLabel')}${totalFichas}`, FONT_STYLE).setOrigin(0.5);
+       const infoY = this.scale.height - 70; // Posición Y de los paneles
+        const panelWidth = 170; // Un poco más anchos
+        const panelHeight = 50;
+        const iconTextXOffset = 50; // Distancia del centro del panel al icono/texto
+        const textStyle = { ...FONT_STYLE, fontSize: '28px', stroke: '#000', strokeThickness: 4 };
+        const iconSize = '36px';
+
+        // --- 1. Panel de Récord (Izquierda) ---
+        // (Usamos los colores del botón "Secreto" como referencia)
+        const scoreX = this.scale.width * 0.3;
+        
+        // Fondo
+        this.add.rectangle(scoreX, infoY, panelWidth, panelHeight, 0xa88f00, 0.8) // Relleno amarillo
+            .setStrokeStyle(3, 0xffe042); // Borde amarillo
+            
+        // Icono (Emoji)
+        this.add.text(scoreX - iconTextXOffset + 20, infoY, '🏆', { fontSize: iconSize }).setOrigin(0.5);
+        
+        // Puntuación
+        this.add.text(scoreX + iconTextXOffset - 20, infoY, highscore, textStyle).setOrigin(0.5);
+
+
+        // --- 2. Panel de Conchas (Derecha) ---
+        // (Usamos los colores del botón "Tienda" como referencia)
+        const shellsX = this.scale.width * 0.7;
+        
+        // Fondo
+        this.add.rectangle(shellsX, infoY, panelWidth, panelHeight, 0x006b5e, 0.8) // Relleno verde
+            .setStrokeStyle(3, 0x00f5d4); // Borde verde
+            
+        // Icono (Imagen)
+        this.add.image(shellsX - iconTextXOffset + 20, infoY, 'collectible_almeja')
+            .setScale(1.0) // Ajustar tamaño
+            .setOrigin(0.5);
+            
+        // Puntuación
+        this.add.text(shellsX + iconTextXOffset - 20, infoY, totalFichas, textStyle).setOrigin(0.5);
+
+        // --- ✅ FIN: NUEVO ESTILO DE PUNTUACIONES ---
+        // --- ======================================================= ---
+
     }
 
     update() { this.background.tilePositionY -= 0.5; }
 }
-
 // =================================================================
 // SCENE: OPTIONS (NUEVA Y MODIFICADA)
 // =================================================================
@@ -810,34 +851,33 @@ class StoreScene extends Phaser.Scene {
     constructor() { super('StoreScene'); }
     
     create() {
-        // --- ✅ MODIFICADO: FADE IN más rápido ---
         this.cameras.main.fadeIn(250, 0, 0, 0);
-        // --- FIN MODIFICADO ---
+
+        // --- ✅ NUEVO: Variables para el estado de los anuncios ---
+        this.adListeners = [];
+        this.isAdShowing = false;
+        // --- FIN NUEVO ---
 
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
         this.add.text(this.scale.width / 2, this.scale.height * 0.1, getText('storeTitle'), { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
 
-        // Mostrar conchas actuales - MODIFICADO
         this.fichasText = this.add.text(this.scale.width / 2, this.scale.height * 0.18, `${getText('shellsLabel')}${totalFichas}`, FONT_STYLE).setOrigin(0.5);
 
-      // --- ✅ INICIO: MODIFICACIÓN DE ESTILO DE BOTONES ---
-
+        // --- ✅ INICIO: MODIFICACIÓN DE ESTILO DE BOTONES ---
         const startY = this.scale.height * 0.3;
         const yIncrement = 120;
         
-        // --- Estilos para los botones internos ---
         const btnWidth = 140;
         const btnHeight = 45;
         const btnFontSize = '18px';
         
-        // Colores para cada estado
         const colors = {
             buy: { fill: 0x004f27, stroke: 0x00b359 },
             select: { fill: 0x004a6b, stroke: 0x00a2f5 },
-            using: { fill: 0x4a4a4a, stroke: 0xb5b5b5 }
+            using: { fill: 0x4a4a4a, stroke: 0xb5b5b5 },
+            ad: { fill: 0xa88f00, stroke: 0xffe042 } // Color para anuncios
         };
 
-        // --- Grid de Skins ---
         const positions = [
             { x: this.scale.width / 2, y: startY },
             { x: this.scale.width / 2, y: startY + yIncrement },
@@ -851,64 +891,78 @@ class StoreScene extends Phaser.Scene {
             const isUnlocked = unlockedSkins.includes(index);
             const isSelected = (selectedSkinIndex === index);
 
-            // Borde visual
-            const border = this.add.rectangle(x, y, 80, 80, 0x000000, 0)
-                                 .setStrokeStyle(4, 0xaaaaaa);
-            
-            // Muestra de skin (Imagen)
+            const border = this.add.rectangle(x, y, 80, 80, 0x000000, 0).setStrokeStyle(4, 0xaaaaaa);
             const swatch = this.add.image(x, y, skinKey).setDisplaySize(70, 70);
             
             if (isUnlocked) {
+                // ... (Lógica para 'USANDO' y 'ELEGIR' no cambia) ...
                 if (isSelected) {
-                    // --- ESTADO USANDO ---
                     border.setStrokeStyle(6, 0xf3a800);
-                    const usingBg = this.add.rectangle(x, y + 55, btnWidth, btnHeight, colors.using.fill, 0.8)
-                        .setStrokeStyle(2, colors.using.stroke);
-                    const usingLabel = this.add.text(x, y + 55, getText('usingLabel'), { ...FONT_STYLE, fontSize: btnFontSize })
-                        .setOrigin(0.5);
-                    // Hacemos que el fondo y borde destaquen
-                    usingBg.setAlpha(1.0);
-                    usingLabel.setAlpha(1.0);
-
+                    const usingBg = this.add.rectangle(x, y + 55, btnWidth, btnHeight, colors.using.fill, 0.8).setStrokeStyle(2, colors.using.stroke);
+                    const usingLabel = this.add.text(x, y + 55, getText('usingLabel'), { ...FONT_STYLE, fontSize: btnFontSize }).setOrigin(0.5);
+                    usingBg.setAlpha(1.0); usingLabel.setAlpha(1.0);
                 } else {
-                    // --- ESTADO ELEGIR ---
-                    const selectBg = this.add.rectangle(x, y + 55, btnWidth, btnHeight, colors.select.fill, 0.8)
-                        .setStrokeStyle(2, colors.select.stroke)
-                        .setAlpha(0.9)
-                        .setInteractive();
-                        
-                    const selectLabel = this.add.text(x, y + 55, getText('selectLabel'), { ...FONT_STYLE, fontSize: btnFontSize })
-                        .setOrigin(0.5)
-                        .setAlpha(0.9);
-
-                    // Hacemos el swatch (la imagen) también clickeable
+                    const selectBg = this.add.rectangle(x, y + 55, btnWidth, btnHeight, colors.select.fill, 0.8).setStrokeStyle(2, colors.select.stroke).setAlpha(0.9).setInteractive();
+                    const selectLabel = this.add.text(x, y + 55, getText('selectLabel'), { ...FONT_STYLE, fontSize: btnFontSize }).setOrigin(0.5).setAlpha(0.9);
                     swatch.setInteractive().on('pointerdown', () => this.selectSkin(index));
                     swatch.on('pointerover', () => swatch.setAlpha(0.8));
                     swatch.on('pointerout', () => swatch.setAlpha(1.0));
-                    
-                    // Aplicamos el tween al fondo del botón
                     applyButtonTweens(this, selectBg, () => this.selectSkin(index));
                 }
             } else {
-                // --- ESTADO COMPRAR ---
+                // --- ✅ LÓGICA MODIFICADA PARA SKIN BLOQUEADA ---
                 swatch.setAlpha(0.3);
                 border.setAlpha(0.3);
-                
                 const canAfford = totalFichas >= COLOR_COST;
-                const currentColors = canAfford ? colors.buy : colors.using; // Reusamos gris si no puede
 
-                const buyBg = this.add.rectangle(x, y + 55, btnWidth, btnHeight, currentColors.fill, 0.8)
-                    .setStrokeStyle(2, currentColors.stroke)
-                    .setAlpha(canAfford ? 0.9 : 0.5); // Atenuado si no puede comprar
+                // --- Caso Especial: Skin de Zombie (índice 1) ---
+                if (index === 1) {
+                    // Mostrar dos botones: Comprar (izquierda) y Anuncio (derecha)
+                    const smallBtnWidth = btnWidth * 0.9;
+                    const smallBtnFontSize = btnFontSize * 0.9;
+                    
+                    // 1. Botón Comprar (Izquierda)
+                    const buyBtnX = x - 75;
+                    const buyColors = canAfford ? colors.buy : colors.using;
+                    const buyBg = this.add.rectangle(buyBtnX, y + 55, smallBtnWidth, btnHeight, buyColors.fill, 0.8)
+                        .setStrokeStyle(2, buyColors.stroke)
+                        .setAlpha(canAfford ? 0.9 : 0.5);
+                    const buyLabel = this.add.text(buyBtnX, y + 55, `(${COLOR_COST})`, { ...FONT_STYLE, fontSize: btnFontSize })
+                        .setOrigin(0.5)
+                        .setAlpha(canAfford ? 0.9 : 0.5);
+                    
+                    if (canAfford) {
+                        buyBg.setInteractive();
+                        applyButtonTweens(this, buyBg, () => this.buySkin(index));
+                    }
 
-                const buyLabel = this.add.text(x, y + 55, `(${COLOR_COST})`, { ...FONT_STYLE, fontSize: btnFontSize })
-                    .setOrigin(0.5)
-                    .setAlpha(canAfford ? 0.9 : 0.5);
+                    // 2. Botón Anuncio (Derecha)
+                    const adBtnX = x + 75;
+                    const adBg = this.add.rectangle(adBtnX, y + 55, smallBtnWidth, btnHeight, colors.ad.fill, 0.8)
+                        .setStrokeStyle(2, colors.ad.stroke)
+                        .setAlpha(0.9)
+                        .setInteractive();
+                    const adLabel = this.add.text(adBtnX, y + 55, getText('unlockWithAd'), { ...FONT_STYLE, fontSize: `${smallBtnFontSize}px` })
+                        .setOrigin(0.5)
+                        .setAlpha(0.9);
+                    
+                    applyButtonTweens(this, adBg, () => this.showAdForSkin(index));
 
-                if (canAfford) {
-                    buyBg.setInteractive();
-                    applyButtonTweens(this, buyBg, () => this.buySkin(index));
+                } else {
+                    // --- Caso Normal: Otras skins (solo se compran) ---
+                    const currentColors = canAfford ? colors.buy : colors.using;
+                    const buyBg = this.add.rectangle(x, y + 55, btnWidth, btnHeight, currentColors.fill, 0.8)
+                        .setStrokeStyle(2, currentColors.stroke)
+                        .setAlpha(canAfford ? 0.9 : 0.5);
+                    const buyLabel = this.add.text(x, y + 55, `(${COLOR_COST})`, { ...FONT_STYLE, fontSize: btnFontSize })
+                        .setOrigin(0.5)
+                        .setAlpha(canAfford ? 0.9 : 0.5);
+                    if (canAfford) {
+                        buyBg.setInteractive();
+                        applyButtonTweens(this, buyBg, () => this.buySkin(index));
+                    }
                 }
+                // --- FIN LÓGICA MODIFICADA ---
             }
         });
         // --- FIN MODIFICADO ---
@@ -919,13 +973,12 @@ class StoreScene extends Phaser.Scene {
             this,
             this.scale.width / 2, this.scale.height * 0.9, 
             getText('backButton'), 
-            250, 60, // Ancho y alto
-            0x3d006b, 0x9d4bff, // Colores
+            250, 60,
+            0x3d006b, 0x9d4bff,
             () => { changeScene(this, 'MainMenuScene'); }
         );
     }
 
-    // --- ✅ MODIFICADO: Renombrado de 'Color' a 'Skin' ---
     buySkin(index) {
         if (totalFichas >= COLOR_COST) {
             totalFichas -= COLOR_COST;
@@ -934,9 +987,7 @@ class StoreScene extends Phaser.Scene {
             unlockedSkins.push(index);
             localStorage.setItem('ascensoZenUnlockedSkins', JSON.stringify(unlockedSkins));
             
-            playSfx(this, 'collect_sfx'); // Sonido de compra
-            
-            // Selecciona automáticamente el skin que acabas de comprar
+            playSfx(this, 'collect_sfx');
             this.selectSkin(index); 
         }
     }
@@ -944,18 +995,116 @@ class StoreScene extends Phaser.Scene {
     selectSkin(index) {
         selectedSkinIndex = index;
         localStorage.setItem('ascensoZenSelectedSkin', selectedSkinIndex.toString());
-        
         playSfx(this, 'click_sfx');
-        
-        // Reiniciar la escena para actualizar visualmente la selección
-        // this.scene.restart(); // <-- Reemplazado por changeScene para suavidad
         changeScene(this, 'StoreScene');
     }
-    // --- FIN MODIFICADO ---
     
     update() { this.background.tilePositionY -= 0.5; }
+
+    // --- ============================================= ---
+    // --- ✅ NUEVO: FUNCIONES DE ANUNCIO COPIADAS DE GAMEOVERSCENE ---
+    // --- ============================================= ---
+
+    showAdLoadingUI(onCancel) {
+        this.adLoadingUI = this.add.group();
+        
+        const overlay = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.7).setOrigin(0,0);
+        overlay.setInteractive();
+        
+        const loadingText = this.add.text(this.scale.width / 2, this.scale.height / 2 - 50, getText('loadingAd'), FONT_STYLE).setOrigin(0.5);
+        
+        const { bg, label } = createStyledButton(
+            this,
+            this.scale.width / 2, this.scale.height / 2 + 50,
+            getText('cancelButton'),
+            200, 50,
+            0x8b0000, 0xff6b6b,
+            () => { onCancel(); }
+        );
+
+        this.adLoadingUI.addMultiple([overlay, loadingText, bg, label]);
+        this.adLoadingUI.setDepth(200);
+    }
+
+    hideAdLoadingUI() {
+        if (this.adLoadingUI) {
+            this.adLoadingUI.destroy(true);
+            this.adLoadingUI = null;
+        }
+    }
+
+    cleanupListeners() {
+        console.log("Limpiando listeners de AdMob específicos de la escena...");
+        this.adListeners.forEach(listener => listener.remove());
+        this.adListeners = [];
+    }
+
+    /**
+     * ✅ NUEVA FUNCIÓN DE ANUNCIO PARA DESBLOQUEAR SKINS
+     */
+    async showAdForSkin(skinIndex) {
+        if (this.isAdShowing) { return; }
+        
+        if (!adMobInitialized) {
+            console.error("AdMob no está listo.");
+            const errorText = this.add.text(this.scale.width / 2, this.scale.height / 2, getText('adError'), { ...FONT_STYLE, fontSize: '16px', fill: '#ff6961' }).setOrigin(0.5);
+            this.time.delayedCall(3000, () => errorText.destroy());
+            return;
+        }
+
+        this.isAdShowing = true;
+        
+        const { AdMob } = Capacitor.Plugins;
+        const adId = 'ca-app-pub-2165332859919251/3961845289'; // ID de anuncio recompensado
+        let isHandled = false;
+
+        const cleanupAndResume = (reason = "Razón desconocida") => {
+            if (isHandled) return;
+            isHandled = true;
+            console.log(`[AdManager] Limpiando. Razón: ${reason}`);
+            this.cleanupListeners();
+            this.hideAdLoadingUI();
+            this.isAdShowing = false;
+        };
+
+        this.showAdLoadingUI(() => cleanupAndResume("Usuario canceló manualmente"));
+
+        const dismissHandler = AdMob.addListener('admob:rewardedVideoAdDismissed', () => cleanupAndResume("Anuncio cerrado"));
+        const failShowHandler = AdMob.addListener('admob:rewardedVideoAdFailedToShow', (error) => cleanupAndResume(`Fallo al mostrar: ${JSON.stringify(error)}`));
+        this.adListeners.push(dismissHandler, failShowHandler);
+
+        try {
+            await AdMob.prepareRewardVideoAd({ adId, isTesting: true });
+            const rewardResult = await AdMob.showRewardVideoAd();
+            
+            if (isHandled) return;
+            
+            if (rewardResult && rewardResult.amount > 0) {
+                console.log('RECOMPENSA OBTENIDA, DESBLOQUEANDO SKIN', rewardResult);
+                isHandled = true;
+                this.cleanupListeners();
+                this.hideAdLoadingUI();
+                
+                // --- ¡LA LÓGICA CLAVE DE DESBLOQUEO! ---
+                unlockedSkins.push(skinIndex);
+                localStorage.setItem('ascensoZenUnlockedSkins', JSON.stringify(unlockedSkins));
+                
+                playSfx(this, 'collect_sfx');
+                
+                // Seleccionar y refrescar la escena
+                this.selectSkin(skinIndex);
+                // --- FIN LÓGICA ---
+
+            } else {
+                cleanupAndResume("Anuncio visto pero sin recompensa");
+            }
+        } catch (e) {
+            console.error("ERROR en flujo de anuncio de skin:", e);
+            cleanupAndResume(`Excepción: ${e.message}`);
+        }
+    }
 }
-// --- FIN NUEVA ESCENA ---
+
 
 
 // =================================================================
@@ -1039,8 +1188,7 @@ class MissionsScene extends Phaser.Scene {
                     () => this.claimMission(mission, index)
                 );
             } else {
-                this.add.text(this.scale.width / 2, buttonY, `+${mission.reward} Conchas`, { ...FONT_STYLE, fontSize: '20px', fill: '#aaaaaa' }).setOrigin(0.5);
-            }
+                this.add.text(this.scale.width / 2, buttonY, getText('missionRewardPending', mission.reward), { ...FONT_STYLE, fontSize: '20px', fill: '#aaaaaa' }).setOrigin(0.5);            }
         });
 
         // Botón Volver
@@ -1977,7 +2125,7 @@ class GameOverScene extends Phaser.Scene {
 
         try {
             console.log("Intentando preparar el anuncio recompensado...");
-            await AdMob.prepareRewardVideoAd({ adId, isTesting: false });
+            await AdMob.prepareRewardVideoAd({ adId, isTesting: true });
             
             console.log("Anuncio preparado, intentando mostrar...");
             const rewardResult = await AdMob.showRewardVideoAd();
