@@ -1390,6 +1390,9 @@ class GameScene extends Phaser.Scene {
         this.safeGap = 220;       // Tamaño inicial del hueco
         this.pufferFishHorizSpeed = 70; // Velocidad horizontal inicial del pez
 
+        this.initialObstacleDelay = 1500;
+        this.initialPufferDelay = 7500;
+
 
         this.isShieldActive = false;
         this.isMagnetActive = false;
