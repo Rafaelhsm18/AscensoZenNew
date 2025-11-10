@@ -58,7 +58,7 @@ const allStrings = {
         'collectedLabel': 'Conchas Recolectadas: ',
         'newClues': (n) => `¡Has revelado ${n} pista(s) nueva(s)!`, // Función para plurales
         'continueCost': (c) => `1 VIDA EXTRA (${c} Conchas)`,
-        'continueAd': '1 VIDA EXTRA (Ver Anuncio)',
+        'continueAd': '1 VIDA EXTRA (Ver AD)',
         'endButton': 'TERMINAR',
         'maxScoreLabel': 'Máximo: ',
         'menuButton': 'MENÚ PRINCIPAL',
@@ -429,14 +429,36 @@ function onAppPause() {
     }
 }
 
+// --- REEMPLAZA ESTA FUNCIÓN ---
 function onAppResume() {
     console.log("App reanudada, reanudando música si el volumen está activo.");
     // Solo reanuda si la música existe, no está sonando ya, y el volumen no es CERO
     if (music && !music.isPlaying && musicVolume > 0) {
         music.resume();
     }
+
+    // --- INICIO DE LA MODIFICACIÓN (SOLO PARA VIDA EXTRA) ---
+    
+    // Usamos game.scene.getScene() para encontrar la escena de Game Over
+    // 'game' es la variable global de Phaser creada al final del archivo
+    const gameOverScene = game.scene.getScene('GameOverScene');
+    
+    // Comprueba si la escena está activa Y si está en modo "mostrando anuncio"
+    // (this.isAdShowing es un flag que definiremos en GameOverScene)
+    if (gameOverScene && gameOverScene.isAdShowing) {
+        console.log("App reanudada mientras GameOverScene esperaba un anuncio.");
+        
+        // Llama a la función de limpieza de esa escena.
+        // Si la recompensa se dio, 'this.rewardGranted' será true.
+        // Si no, será false.
+        // El segundo argumento es 'shouldResumeGame'
+        gameOverScene.cleanupAndResume(
+            "App reanudada por 'resume' event", 
+            gameOverScene.rewardGranted // Pasa el estado de la recompensa
+        );
+    }
+    // --- FIN DE LA MODIFICACIÓN ---
 }
-// --- FIN NUEVO ---
 
 
 // =================================================================
@@ -1221,8 +1243,10 @@ class StoreScene extends Phaser.Scene {
                 
                 playSfx(this, 'collect_sfx');
                 
-                // Actualizar el texto en pantalla
-                this.fichasText.setText(`${getText('shellsLabel')}${totalFichas}`);
+                // Solo actualiza si la escena/texto todavía existe
+                if (this.fichasText) {
+                    this.fichasText.setText(totalFichas); // <-- ¡Esta línea es la corrección!
+                }
                 
                 // --- NUEVO: Guardar fecha y deshabilitar botón ---
                 localStorage.setItem('ascensoZenAdForShellsDate', new Date().toDateString());
@@ -1389,6 +1413,9 @@ class GameScene extends Phaser.Scene {
         this.fichaSpeed = 300;    // Velocidad inicial de conchas
         this.safeGap = 220;       // Tamaño inicial del hueco
         this.pufferFishHorizSpeed = 70; // Velocidad horizontal inicial del pez
+
+        this.initialObstacleDelay = 1500;
+        this.initialPufferDelay = 7500;
 
 
         this.isShieldActive = false;
@@ -2058,25 +2085,39 @@ class GameScene extends Phaser.Scene {
         }
         totalFichas += this.fichas;
         localStorage.setItem('ascensoZenFichas', totalFichas);
+      
+        let newCluesUnlocked = 0; // Variable para las nuevas pistas
+
+        // Actualizar puntuación MÁXIMA y calcular pistas nuevas
+        if (finalScore > highscore) { 
+            // Calcular pistas basadas en la PUNTUACIÓN (cada 1000)
+            const oldCluesCount = Math.floor(highscore / 1000);
+            const newCluesCount = Math.floor(finalScore / 1000);
+            newCluesUnlocked = newCluesCount - oldCluesCount;
+
+            highscore = finalScore; // Actualizar el highscore global
+            localStorage.setItem('ascensoZenHighscore', highscore); 
+        }
+
+        // Actualizar conchas TOTALES
+        totalFichas += this.fichas;
+        localStorage.setItem('ascensoZenFichas', totalFichas);
+        
+        // Actualizar conchas MÁXIMAS EN UNA PARTIDA (lo mantenemos por si lo usas en otro sitio)
         if (this.fichas > maxFichasInRun) {
-            const oldCluesCount = Math.floor(maxFichasInRun / 100);
-            const newCluesCount = Math.floor(this.fichas / 100);
-            const newCluesUnlocked = newCluesCount - oldCluesCount;
             maxFichasInRun = this.fichas;
             localStorage.setItem('ascensoZenMaxFichas', maxFichasInRun);
-            
-            // --- MODIFICADO: USA changeScene ---
-            this.time.delayedCall(1000, () => {
-                // No podemos usar changeScene aquí porque no hay fadeOut, es un corte
-                this.scene.start('GameOverScene', { score: finalScore, fichas: this.fichas, hasContinued: this.hasContinued, newClues: newCluesUnlocked });
-            });
-
-        } else {
-            // --- MODIFICADO: USA changeScene ---
-            this.time.delayedCall(1000, () => {
-                this.scene.start('GameOverScene', { score: finalScore, fichas: this.fichas, hasContinued: this.hasContinued, newClues: 0 });
-            });
         }
+        
+        // Ir a la pantalla de Game Over
+        this.time.delayedCall(1000, () => {
+            this.scene.start('GameOverScene', { 
+                score: finalScore, 
+                fichas: this.fichas, 
+                hasContinued: this.hasContinued, 
+                newClues: newCluesUnlocked // Pasa las nuevas pistas desbloqueadas
+            });
+        });
     }
 }
 
@@ -2095,7 +2136,7 @@ class SecretScene extends Phaser.Scene {
         
         // --- MODIFICADO: Carga dinámica del idioma ---
         const SECRET_MESSAGE = getText('secretMessage');
-        const unlockedCount = Math.floor(maxFichasInRun / 100);
+        const unlockedCount = Math.floor(highscore / 1000);
         let revealedMessage = '';
         for (let i = 0; i < SECRET_MESSAGE.length; i++) {
             revealedMessage += (i < unlockedCount) ? (SECRET_MESSAGE[i] + ' ') : '??? ';
@@ -2115,55 +2156,111 @@ class SecretScene extends Phaser.Scene {
     update() { this.background.tilePositionY -= 0.5; }
 }
 
+// --- REEMPLAZA ESTA CLASE ENTERA ---
 // =================================================================
 // SCENE: GAME OVER & CONTINUE (MODIFICADA)
 // =================================================================
 class GameOverScene extends Phaser.Scene {
     constructor() { super('GameOverScene'); }
+    
     init(data) { 
         this.score = data.score; 
         this.fichas = data.fichas;
         this.hasContinued = data.hasContinued; 
         this.newClues = data.newClues || 0; 
+        
+        // Flags de anuncios (los mantendremos para la lógica de 'onAppResume')
         this.isAdShowing = false;
         this.adListeners = []; 
-        this.adLoadingUI = null; // Grupo para los elementos de la UI de carga
-// --- ✅ NUEVO: Para guardar referencias a los botones ---
+        this.adLoadingUI = null;
         this.continueButtons = [];
+        this.rewardGranted = false;
+        this.isHandled = false;
     }
     
     create() {
         this.cameras.main.fadeIn(250, 0, 0, 0);
 
         this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'background_vertical').setOrigin(0,0);
-        this.add.text(this.scale.width / 2, this.scale.height * 0.2, getText('gameOverTitle'), { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
-        this.add.text(this.scale.width / 2, this.scale.height * 0.28, `${getText('scoreLabel')}${this.score}`, FONT_STYLE).setOrigin(0.5);
-        this.add.text(this.scale.width / 2, this.scale.height * 0.35, `${getText('collectedLabel')}${this.fichas}`, FONT_STYLE).setOrigin(0.5);
-        this.add.text(this.scale.width / 2, this.scale.height * 0.42, `${getText('totalShellsLabel')}${totalFichas}`, FONT_STYLE).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height * 0.15, getText('gameOverTitle'), { ...FONT_STYLE, fontSize: '42px' }).setOrigin(0.5);
 
+        // --- ================================================= ---
+        // --- INICIO DEL NUEVO PANEL DE RESULTADOS ---
+        // --- ================================================= ---
+
+        // 1. Definir la geometría del panel
+        const panelWidth = this.scale.width * 0.8;
+        const panelHeight = 180; // Altura para 3 filas
+        const panelX = this.scale.width / 2;
+        const panelY = this.scale.height * 0.35; // Centrado en la parte superior
+
+        // 2. Dibujar el fondo del panel
+        this.add.rectangle(panelX, panelY, panelWidth, panelHeight, 0x000000, 0.4)
+            .setStrokeStyle(3, 0x9d4bff, 0.8); // Borde sutil púrpura
+
+        // 3. Definir estilos y posiciones de las columnas
+        const labelStyle = { ...FONT_STYLE, fontSize: '24px', fill: '#cccccc' };
+        const valueStyle = { ...FONT_STYLE, fontSize: '26px', fill: '#ffffff', stroke: '#000000', strokeThickness: 3 };
+
+        const leftColumnX = panelX - panelWidth / 2 + 30;  // Borde izq + padding
+        const rightColumnX = panelX + panelWidth / 2 - 30; // Borde der - padding
+
+        const row1Y = panelY - panelHeight / 2 + 40; // Fila 1
+        const row2Y = row1Y + 50;                    // Fila 2
+        const row3Y = row2Y + 50;                    // Fila 3
+
+        // --- Fila 1: Puntuación ---
+        this.add.text(leftColumnX, row1Y, getText('scoreLabel'), labelStyle).setOrigin(0, 0.5);
+        this.add.text(rightColumnX, row1Y, this.score, valueStyle).setOrigin(1, 0.5);
+
+     // --- Fila 2: Conchas Recolectadas ---
+        this.add.text(leftColumnX, row2Y, getText('collectedLabel'), labelStyle).setOrigin(0, 0.5);
+        this.add.text(rightColumnX, row2Y, this.fichas, valueStyle).setOrigin(1, 0.5); // Icono eliminado
+
+        // --- Fila 3: Conchas Totales ---
+        this.add.text(leftColumnX, row3Y, getText('totalShellsLabel'), labelStyle).setOrigin(0, 0.5);
+        this.add.text(rightColumnX, row3Y, totalFichas, valueStyle).setOrigin(1, 0.5); // Icono eliminado
+
+        // --- FIN DEL NUEVO PANEL DE RESULTADOS ---
+        // --- ================================================= ---
+
+        // Posición Y para el texto de "Nuevas Pistas" (debajo del panel)
+        const cluesY = panelY + panelHeight / 2 + 30;
         if (this.newClues > 0) {
-            this.add.text(this.scale.width / 2, this.scale.height * 0.5, getText('newClues', this.newClues), { ...FONT_STYLE, fill: '#93f300' }).setOrigin(0.5);
+            this.add.text(this.scale.width / 2, cluesY, getText('newClues', this.newClues), { ...FONT_STYLE, fill: '#93f300' }).setOrigin(0.5);
         }
 
-        if (!this.hasContinued) this.createContinueOptions();
-        else this.createEndGameButtons();
+        // Posición Y de inicio para los botones (debajo del panel y pistas)
+        const buttonYStart = cluesY + (this.newClues > 0 ? 60 : 30);
+
+        // Pasamos la nueva Y de inicio a las funciones de botones
+        if (!this.hasContinued) {
+            this.createContinueOptions(buttonYStart);
+        } else {
+            // Un poco más arriba si no están las opciones de continuar
+            this.createEndGameButtons(buttonYStart - 20); 
+        }
     }
 
     update() { if (!this.isAdShowing) this.background.tilePositionY -= 0.5; }
     
-    // --- ✅ MODIFICADO: createContinueOptions ---
-    createContinueOptions() {
-        this.continueButtons = []; // Resetea el array
+    // --- MODIFICADA: Acepta 'startY' ---
+    createContinueOptions(startY) {
+        this.continueButtons = [];
         let btnObjects;
-
         const btnWidth = this.scale.width * 0.7;
         const btnHeight = 55;
+        
+        // Nuevas posiciones Y basadas en 'startY'
+        const continueCostY = startY;
+        const continueAdY = continueCostY + 72; // Espacio
+        const endButtonY = continueAdY + 72; // Espacio
 
         // Botón Continuar con Monedas
         if (totalFichas >= CONTINUE_COST) {
             btnObjects = createStyledButton(
                 this,
-                this.scale.width / 2, this.scale.height * 0.6, 
+                this.scale.width / 2, continueCostY, // Y actualizada
                 getText('continueCost', CONTINUE_COST),
                 btnWidth, btnHeight,
                 0x004f27, 0x00b359,
@@ -2179,7 +2276,7 @@ class GameOverScene extends Phaser.Scene {
         // Botón Continuar con Anuncio
         btnObjects = createStyledButton(
             this,
-            this.scale.width / 2, this.scale.height * 0.72, // Ajuste de Y
+            this.scale.width / 2, continueAdY, // Y actualizada
             getText('continueAd'),
             btnWidth, btnHeight,
             0xa88f00, 0xffe042,
@@ -2190,80 +2287,71 @@ class GameOverScene extends Phaser.Scene {
         // Botón Terminar
         btnObjects = createStyledButton(
             this,
-            this.scale.width / 2, this.scale.height * 0.84, // Ajuste de Y
+            this.scale.width / 2, endButtonY, // Y actualizada
             getText('endButton'),
-            btnWidth * 0.8, btnHeight * 0.9, // Más pequeño
+            btnWidth * 0.8, btnHeight * 0.9,
             0x4a4a4a, 0xb5b5b5,
             () => {
-                // Destruye los botones de continuar
                 this.continueButtons.forEach(obj => obj.destroy());
-                this.createEndGameButtons(); // Muestra los botones finales
+                // Pasamos la 'startY' a la siguiente función
+                this.createEndGameButtons(startY - 20);
             }
         );
-        // Añade también el botón "Terminar" para que se autodestruya
         this.continueButtons.push(btnObjects.bg, btnObjects.label);
     }
 
-  createEndGameButtons() {
-        this.add.text(this.scale.width / 2, this.scale.height * 0.55, `${getText('maxScoreLabel')}${highscore}`, { ...FONT_STYLE, fill: '#f3a800' }).setOrigin(0.5);
+    // --- MODIFICADA: Acepta 'startY' ---
+    createEndGameButtons(startY) {
+        // Posiciones Y actualizadas
+        const maxScoreY = startY;
+        const bonusButtonY = maxScoreY + 70;
+        const menuButtonY = bonusButtonY + 75;
+
+        this.add.text(this.scale.width / 2, maxScoreY, `${getText('maxScoreLabel')}${highscore}`, { ...FONT_STYLE, fill: '#f3a800' }).setOrigin(0.5);
 
         const rewardCost = 100;
         const canAfford = totalFichas >= rewardCost;
-
-        // --- 1. Botón JUGAR CON BONUS (AHORA ES EL PRINCIPAL) ---
-        
         const btnText = canAfford ? getText('bonusButton', rewardCost) : getText('bonusNeeds', rewardCost);
-        const btnColor = canAfford ? 0x004f27 : 0x4a4a4a; // Verde si puede, gris si no
+        const btnColor = canAfford ? 0x004f27 : 0x4a4a4a;
         const btnStroke = canAfford ? 0x00b359 : 0xb5b5b5;
 
-        // Posición Principal (arriba y grande)
         const { bg, label } = createStyledButton(
             this,
-            this.scale.width / 2, this.scale.height * 0.68, // Posición principal
+            this.scale.width / 2, bonusButtonY, // Y actualizada
             btnText,
-            this.scale.width * 0.7, 60, // Botón grande
+            this.scale.width * 0.7, 60,
             btnColor, btnStroke,
             () => {
-                // Esta función de clic SOLO se ejecuta si se puede pagar
                 if (canAfford) {
                     totalFichas -= rewardCost; 
                     localStorage.setItem('ascensoZenFichas', totalFichas);
                     localStorage.setItem('ascensoZenBonusActive', 'true');
-                    
-                    // --- ¡LA NUEVA ACCIÓN! ---
-                    // Inicia una nueva partida con score 0
                     changeScene(this, 'GameScene', { score: 0, fichas: 0, hasContinued: false });
                 }
             }
         );
 
-        // Si no puede pagar, deshabilitar
         if (!canAfford) {
             bg.disableInteractive().setAlpha(0.5);
             label.setAlpha(0.5);
         }
 
-        // --- 2. Botón Menú Principal (AHORA ES EL SECUNDARIO) ---
         createStyledButton(
             this,
-            this.scale.width / 2, this.scale.height * 0.82, // Posición secundaria
+            this.scale.width / 2, menuButtonY, // Y actualizada
             getText('menuButton'),
-            this.scale.width * 0.7, 50, // Botón más pequeño
-            0x3d006b, 0x9d4bff, // Color de menú
+            this.scale.width * 0.7, 50,
+            0x3d006b, 0x9d4bff,
             () => { changeScene(this, 'MainMenuScene'); }
         );
     }
 
-    // --- Interfaz de Carga de Anuncio (Con botones nuevos) ---
+    // --- Interfaz de Carga de Anuncio (Sin cambios) ---
     showAdLoadingUI(onCancel) {
         this.adLoadingUI = this.add.group();
-        
         const overlay = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.7).setOrigin(0,0);
         overlay.setInteractive();
-        
         const loadingText = this.add.text(this.scale.width / 2, this.scale.height / 2 - 50, getText('loadingAd'), FONT_STYLE).setOrigin(0.5);
-        
-        // Botón Cancelar con nuevo estilo
         const { bg, label } = createStyledButton(
             this,
             this.scale.width / 2, this.scale.height / 2 + 50,
@@ -2272,62 +2360,67 @@ class GameOverScene extends Phaser.Scene {
             0x8b0000, 0xff6b6b,
             () => { onCancel(); }
         );
-
         this.adLoadingUI.addMultiple([overlay, loadingText, bg, label]);
         this.adLoadingUI.setDepth(200);
     }
 
     hideAdLoadingUI() {
         if (this.adLoadingUI) {
-            this.adLoadingUI.destroy(true); // El 'true' destruye también a los hijos del grupo
+            this.adLoadingUI.destroy(true);
             this.adLoadingUI = null;
         }
     }
 
-    // --- LÓGICA DE ADMOB MEJORADA Y A PRUEBA DE FALLOS ---
+    // --- Lógica de Anuncios (Sin cambios, ya está corregida) ---
+    cleanupAndResume(reason = "Razón desconocida", shouldResumeGame = false) {
+        if (this.isHandled) return;
+        this.isHandled = true;
+        
+        console.log(`[AdManager] Limpiando. Razón: ${reason}`);
+        
+        this.cleanupListeners();
+        this.hideAdLoadingUI();
+        this.isAdShowing = false;
+        this.rewardGranted = false;
+
+        if (shouldResumeGame) {
+            console.log("Recompensa válida y anuncio cerrado. Reanudando partida.");
+            changeScene(this, 'GameScene', { score: this.score, fichas: 0, hasContinued: true });
+        } else {
+            console.log("No se reanuda la partida (sin recompensa o error).");
+        }
+    }
+    /**
+     * Esta función MODIFICADA ahora usa los nuevos flags y la nueva función de limpieza.
+     */
     async showAdAndContinue() {
         if (this.isAdShowing) { return; }
         
         if (!adMobInitialized) {
             console.error("AdMob no está listo.");
-            // MODIFICADO
-            const errorText = this.add.text(this.scale.width / 2, this.adButton.y + 60, getText('adError'), { ...FONT_STYLE, fontSize: '16px', fill: '#ff6961' }).setOrigin(0.5);
+            // Corregido: Busca el botón de anuncio por su posición Y
+            const adButtonY = this.scale.height * 0.72; 
+            const errorText = this.add.text(this.scale.width / 2, adButtonY + 60, getText('adError'), { ...FONT_STYLE, fontSize: '16px', fill: '#ff6961' }).setOrigin(0.5);
             this.time.delayedCall(3000, () => errorText.destroy());
             return;
         }
 
+        // Resetea los flags para este intento de anuncio
         this.isAdShowing = true;
+        this.rewardGranted = false;
+        this.isHandled = false;
         
         const { AdMob } = Capacitor.Plugins;
-        const adId = 'ca-app-pub-2165332859919251/3961845289'; // ID de prueba oficial de Google
-        let isHandled = false;
+        const adId = 'ca-app-pub-2165332859919251/3961845289'; // ID de anuncio
 
-        const cleanupAndResume = (reason = "Razón desconocida") => {
-            if (isHandled) return;
-            isHandled = true;
-            
-            console.log(`[AdManager] Limpiando y reanudando escena. Razón: ${reason}`);
-            
-            // --- MODIFICACIÓN: TIMEOUT ELIMINADO ---
-            // if (adTimeout && adTimeout.remove) adTimeout.remove();
-            // --- FIN MODIFICACIÓN ---
-
-            this.cleanupListeners();
-            this.hideAdLoadingUI();
-            this.isAdShowing = false;
-        };
-
-        // --- MODIFICACIÓN: TIMEOUT ELIMINADO ---
-        // const adTimeout = this.time.delayedCall(15000, () => cleanupAndResume("Timeout de 15s alcanzado"));
-        // --- FIN MODIFICACIÓN ---
-        
-        // --- Mostrar UI de carga con botón de cancelar ---
-        this.showAdLoadingUI(() => cleanupAndResume("Usuario canceló manualmente"));
+        // Muestra la UI de carga. Si se cancela, llama a cleanupAndResume (sin reanudar)
+        this.showAdLoadingUI(() => this.cleanupAndResume("Usuario canceló manualmente", false));
 
         // --- Listeners de AdMob (como fallback) ---
-        const dismissHandler = AdMob.addListener('admob:rewardedVideoAdDismissed', () => cleanupAndResume("Anuncio cerrado por el usuario"));
-        const failShowHandler = AdMob.addListener('admob:rewardedVideoAdFailedToShow', (error) => cleanupAndResume(`Fallo al mostrar anuncio: ${JSON.stringify(error)}`));
-        this.adListeners.push(dismissHandler, failShowHandler);
+        // Siguen aquí por seguridad, pero 'onAppResume' es nuestro método principal
+        const dismissHandler = AdMob.addListener('admob:rewardedVideoAdDismissed', () => this.cleanupAndResume("Anuncio cerrado por 'dismiss' event", this.rewardGranted));
+        const failShowHandler = AdMob.addListener('admob:rewardedVideoAdFailedToShow', (error) => this.cleanupAndResume(`Fallo al mostrar anuncio: ${JSON.stringify(error)}`, false));
+        this.adListeners.push(dismissHandler, failShowHandler); // Guardarlos para limpiar
 
         try {
             console.log("Intentando preparar el anuncio recompensado...");
@@ -2336,29 +2429,23 @@ class GameOverScene extends Phaser.Scene {
             console.log("Anuncio preparado, intentando mostrar...");
             const rewardResult = await AdMob.showRewardVideoAd();
             
-            if (isHandled) return; // Si ya se manejó (ej: por timeout), no hacer nada
+            if (this.isHandled) return; // Si ya se manejó (por error), no hacer nada
             
             if (rewardResult && rewardResult.amount > 0) {
-                console.log('RECOMPENSA OBTENIDA', rewardResult);
-                isHandled = true;
+                console.log('RECOMPENSA OBTENIDA, esperando cierre.', rewardResult);
+                this.rewardGranted = true; // <-- Solo marcamos la recompensa
                 
-                // --- MODIFICACIÓN: TIMEOUT ELIMINADO ---
-                // adTimeout.remove();
-                // --- FIN MODIFICACIÓN ---
-
-                this.cleanupListeners();
-                this.hideAdLoadingUI();
+                // NO HACEMOS NADA MÁS.
+                // El evento 'onAppResume' (principal) o 'dismissHandler' (fallback)
+                // se encargarán de llamar a cleanupAndResume.
                 
-                // --- MODIFICADO: USA changeScene ---
-                //this.scene.start('GameScene', { score: this.score, fichas: 0, hasContinued: true });
-                changeScene(this, 'GameScene', { score: this.score, fichas: 0, hasContinued: true });
-
             } else {
-                cleanupAndResume("Anuncio visto pero sin recompensa");
+                console.log("Anuncio visto pero sin recompensa, esperando cierre.");
+                // Tampoco hacemos nada. El evento de cierre se encargará.
             }
         } catch (e) {
             console.error("ERROR CATASTRÓFICO en el flujo del anuncio:", e);
-            cleanupAndResume(`Excepción en try/catch: ${e.message}`);
+            this.cleanupAndResume(`Excepción en try/catch: ${e.message}`, false);
         }
     }
     
@@ -2368,6 +2455,7 @@ class GameOverScene extends Phaser.Scene {
         this.adListeners = [];
     }
 }
+// --- FIN DEL REEMPLAZO DE CLASE ---
 
 // =================================================================
 // GAME INITIALIZATION
