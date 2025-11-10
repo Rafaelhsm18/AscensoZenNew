@@ -429,14 +429,36 @@ function onAppPause() {
     }
 }
 
+// --- REEMPLAZA ESTA FUNCIÓN ---
 function onAppResume() {
     console.log("App reanudada, reanudando música si el volumen está activo.");
     // Solo reanuda si la música existe, no está sonando ya, y el volumen no es CERO
     if (music && !music.isPlaying && musicVolume > 0) {
         music.resume();
     }
+
+    // --- INICIO DE LA MODIFICACIÓN (SOLO PARA VIDA EXTRA) ---
+    
+    // Usamos game.scene.getScene() para encontrar la escena de Game Over
+    // 'game' es la variable global de Phaser creada al final del archivo
+    const gameOverScene = game.scene.getScene('GameOverScene');
+    
+    // Comprueba si la escena está activa Y si está en modo "mostrando anuncio"
+    // (this.isAdShowing es un flag que definiremos en GameOverScene)
+    if (gameOverScene && gameOverScene.isAdShowing) {
+        console.log("App reanudada mientras GameOverScene esperaba un anuncio.");
+        
+        // Llama a la función de limpieza de esa escena.
+        // Si la recompensa se dio, 'this.rewardGranted' será true.
+        // Si no, será false.
+        // El segundo argumento es 'shouldResumeGame'
+        gameOverScene.cleanupAndResume(
+            "App reanudada por 'resume' event", 
+            gameOverScene.rewardGranted // Pasa el estado de la recompensa
+        );
+    }
+    // --- FIN DE LA MODIFICACIÓN ---
 }
-// --- FIN NUEVO ---
 
 
 // =================================================================
@@ -2118,11 +2140,13 @@ class SecretScene extends Phaser.Scene {
     update() { this.background.tilePositionY -= 0.5; }
 }
 
+// --- REEMPLAZA ESTA CLASE ENTERA ---
 // =================================================================
 // SCENE: GAME OVER & CONTINUE (MODIFICADA)
 // =================================================================
 class GameOverScene extends Phaser.Scene {
     constructor() { super('GameOverScene'); }
+    
     init(data) { 
         this.score = data.score; 
         this.fichas = data.fichas;
@@ -2130,9 +2154,13 @@ class GameOverScene extends Phaser.Scene {
         this.newClues = data.newClues || 0; 
         this.isAdShowing = false;
         this.adListeners = []; 
-        this.adLoadingUI = null; // Grupo para los elementos de la UI de carga
-// --- ✅ NUEVO: Para guardar referencias a los botones ---
+        this.adLoadingUI = null;
         this.continueButtons = [];
+
+        // --- INICIO DE LA MODIFICACIÓN (SOLO PARA VIDA EXTRA) ---
+        this.rewardGranted = false; // Flag para guardar el estado de la recompensa
+        this.isHandled = false;     // Flag para evitar doble ejecución
+        // --- FIN DE LA MODIFICACIÓN ---
     }
     
     create() {
@@ -2154,7 +2182,6 @@ class GameOverScene extends Phaser.Scene {
 
     update() { if (!this.isAdShowing) this.background.tilePositionY -= 0.5; }
     
-    // --- ✅ MODIFICADO: createContinueOptions ---
     createContinueOptions() {
         this.continueButtons = []; // Resetea el array
         let btnObjects;
@@ -2186,7 +2213,7 @@ class GameOverScene extends Phaser.Scene {
             getText('continueAd'),
             btnWidth, btnHeight,
             0xa88f00, 0xffe042,
-            () => { this.showAdAndContinue(); }
+            () => { this.showAdAndContinue(); } // Esta es la función que vamos a modificar
         );
         this.continueButtons.push(btnObjects.bg, btnObjects.label);
 
@@ -2203,70 +2230,54 @@ class GameOverScene extends Phaser.Scene {
                 this.createEndGameButtons(); // Muestra los botones finales
             }
         );
-        // Añade también el botón "Terminar" para que se autodestruya
         this.continueButtons.push(btnObjects.bg, btnObjects.label);
     }
 
-  createEndGameButtons() {
+    createEndGameButtons() {
         this.add.text(this.scale.width / 2, this.scale.height * 0.55, `${getText('maxScoreLabel')}${highscore}`, { ...FONT_STYLE, fill: '#f3a800' }).setOrigin(0.5);
 
         const rewardCost = 100;
         const canAfford = totalFichas >= rewardCost;
-
-        // --- 1. Botón JUGAR CON BONUS (AHORA ES EL PRINCIPAL) ---
-        
         const btnText = canAfford ? getText('bonusButton', rewardCost) : getText('bonusNeeds', rewardCost);
-        const btnColor = canAfford ? 0x004f27 : 0x4a4a4a; // Verde si puede, gris si no
+        const btnColor = canAfford ? 0x004f27 : 0x4a4a4a;
         const btnStroke = canAfford ? 0x00b359 : 0xb5b5b5;
 
-        // Posición Principal (arriba y grande)
         const { bg, label } = createStyledButton(
             this,
-            this.scale.width / 2, this.scale.height * 0.68, // Posición principal
+            this.scale.width / 2, this.scale.height * 0.68,
             btnText,
-            this.scale.width * 0.7, 60, // Botón grande
+            this.scale.width * 0.7, 60,
             btnColor, btnStroke,
             () => {
-                // Esta función de clic SOLO se ejecuta si se puede pagar
                 if (canAfford) {
                     totalFichas -= rewardCost; 
                     localStorage.setItem('ascensoZenFichas', totalFichas);
                     localStorage.setItem('ascensoZenBonusActive', 'true');
-                    
-                    // --- ¡LA NUEVA ACCIÓN! ---
-                    // Inicia una nueva partida con score 0
                     changeScene(this, 'GameScene', { score: 0, fichas: 0, hasContinued: false });
                 }
             }
         );
 
-        // Si no puede pagar, deshabilitar
         if (!canAfford) {
             bg.disableInteractive().setAlpha(0.5);
             label.setAlpha(0.5);
         }
 
-        // --- 2. Botón Menú Principal (AHORA ES EL SECUNDARIO) ---
         createStyledButton(
             this,
-            this.scale.width / 2, this.scale.height * 0.82, // Posición secundaria
+            this.scale.width / 2, this.scale.height * 0.82,
             getText('menuButton'),
-            this.scale.width * 0.7, 50, // Botón más pequeño
-            0x3d006b, 0x9d4bff, // Color de menú
+            this.scale.width * 0.7, 50,
+            0x3d006b, 0x9d4bff,
             () => { changeScene(this, 'MainMenuScene'); }
         );
     }
 
-    // --- Interfaz de Carga de Anuncio (Con botones nuevos) ---
     showAdLoadingUI(onCancel) {
         this.adLoadingUI = this.add.group();
-        
         const overlay = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.7).setOrigin(0,0);
         overlay.setInteractive();
-        
         const loadingText = this.add.text(this.scale.width / 2, this.scale.height / 2 - 50, getText('loadingAd'), FONT_STYLE).setOrigin(0.5);
-        
-        // Botón Cancelar con nuevo estilo
         const { bg, label } = createStyledButton(
             this,
             this.scale.width / 2, this.scale.height / 2 + 50,
@@ -2275,62 +2286,74 @@ class GameOverScene extends Phaser.Scene {
             0x8b0000, 0xff6b6b,
             () => { onCancel(); }
         );
-
         this.adLoadingUI.addMultiple([overlay, loadingText, bg, label]);
         this.adLoadingUI.setDepth(200);
     }
 
     hideAdLoadingUI() {
         if (this.adLoadingUI) {
-            this.adLoadingUI.destroy(true); // El 'true' destruye también a los hijos del grupo
+            this.adLoadingUI.destroy(true);
             this.adLoadingUI = null;
         }
     }
 
-    // --- LÓGICA DE ADMOB MEJORADA Y A PRUEBA DE FALLOS ---
+    // --- INICIO DE LA MODIFICACIÓN (SOLO PARA VIDA EXTRA) ---
+
+    /**
+     * Esta NUEVA función centraliza toda la lógica de limpieza y decisión.
+     * Es llamada por onAppResume (principal) o por el listener 'dismiss' (fallback).
+     */
+    cleanupAndResume(reason = "Razón desconocida", shouldResumeGame = false) {
+        // isHandled evita que esto se llame dos veces (por 'dismiss' Y por 'resume')
+        if (this.isHandled) return;
+        this.isHandled = true;
+        
+        console.log(`[AdManager] Limpiando. Razón: ${reason}`);
+        
+        this.cleanupListeners(); // Limpia los listeners de AdMob
+        this.hideAdLoadingUI();
+        this.isAdShowing = false;
+        this.rewardGranted = false; // Resetea el flag
+
+        if (shouldResumeGame) {
+            console.log("Recompensa válida y anuncio cerrado. Reanudando partida.");
+            changeScene(this, 'GameScene', { score: this.score, fichas: 0, hasContinued: true });
+        } else {
+            console.log("No se reanuda la partida (sin recompensa o error).");
+        }
+    }
+
+    /**
+     * Esta función MODIFICADA ahora usa los nuevos flags y la nueva función de limpieza.
+     */
     async showAdAndContinue() {
         if (this.isAdShowing) { return; }
         
         if (!adMobInitialized) {
             console.error("AdMob no está listo.");
-            // MODIFICADO
-            const errorText = this.add.text(this.scale.width / 2, this.adButton.y + 60, getText('adError'), { ...FONT_STYLE, fontSize: '16px', fill: '#ff6961' }).setOrigin(0.5);
+            // Corregido: Busca el botón de anuncio por su posición Y
+            const adButtonY = this.scale.height * 0.72; 
+            const errorText = this.add.text(this.scale.width / 2, adButtonY + 60, getText('adError'), { ...FONT_STYLE, fontSize: '16px', fill: '#ff6961' }).setOrigin(0.5);
             this.time.delayedCall(3000, () => errorText.destroy());
             return;
         }
 
+        // Resetea los flags para este intento de anuncio
         this.isAdShowing = true;
+        this.rewardGranted = false;
+        this.isHandled = false;
         
         const { AdMob } = Capacitor.Plugins;
-        const adId = 'ca-app-pub-2165332859919251/3961845289'; // ID de prueba oficial de Google
-        let isHandled = false;
+        const adId = 'ca-app-pub-2165332859919251/3961845289'; // ID de anuncio
 
-        const cleanupAndResume = (reason = "Razón desconocida") => {
-            if (isHandled) return;
-            isHandled = true;
-            
-            console.log(`[AdManager] Limpiando y reanudando escena. Razón: ${reason}`);
-            
-            // --- MODIFICACIÓN: TIMEOUT ELIMINADO ---
-            // if (adTimeout && adTimeout.remove) adTimeout.remove();
-            // --- FIN MODIFICACIÓN ---
-
-            this.cleanupListeners();
-            this.hideAdLoadingUI();
-            this.isAdShowing = false;
-        };
-
-        // --- MODIFICACIÓN: TIMEOUT ELIMINADO ---
-        // const adTimeout = this.time.delayedCall(15000, () => cleanupAndResume("Timeout de 15s alcanzado"));
-        // --- FIN MODIFICACIÓN ---
-        
-        // --- Mostrar UI de carga con botón de cancelar ---
-        this.showAdLoadingUI(() => cleanupAndResume("Usuario canceló manualmente"));
+        // Muestra la UI de carga. Si se cancela, llama a cleanupAndResume (sin reanudar)
+        this.showAdLoadingUI(() => this.cleanupAndResume("Usuario canceló manualmente", false));
 
         // --- Listeners de AdMob (como fallback) ---
-        const dismissHandler = AdMob.addListener('admob:rewardedVideoAdDismissed', () => cleanupAndResume("Anuncio cerrado por el usuario"));
-        const failShowHandler = AdMob.addListener('admob:rewardedVideoAdFailedToShow', (error) => cleanupAndResume(`Fallo al mostrar anuncio: ${JSON.stringify(error)}`));
-        this.adListeners.push(dismissHandler, failShowHandler);
+        // Siguen aquí por seguridad, pero 'onAppResume' es nuestro método principal
+        const dismissHandler = AdMob.addListener('admob:rewardedVideoAdDismissed', () => this.cleanupAndResume("Anuncio cerrado por 'dismiss' event", this.rewardGranted));
+        const failShowHandler = AdMob.addListener('admob:rewardedVideoAdFailedToShow', (error) => this.cleanupAndResume(`Fallo al mostrar anuncio: ${JSON.stringify(error)}`, false));
+        this.adListeners.push(dismissHandler, failShowHandler); // Guardarlos para limpiar
 
         try {
             console.log("Intentando preparar el anuncio recompensado...");
@@ -2339,29 +2362,23 @@ class GameOverScene extends Phaser.Scene {
             console.log("Anuncio preparado, intentando mostrar...");
             const rewardResult = await AdMob.showRewardVideoAd();
             
-            if (isHandled) return; // Si ya se manejó (ej: por timeout), no hacer nada
+            if (this.isHandled) return; // Si ya se manejó (por error), no hacer nada
             
             if (rewardResult && rewardResult.amount > 0) {
-                console.log('RECOMPENSA OBTENIDA', rewardResult);
-                isHandled = true;
+                console.log('RECOMPENSA OBTENIDA, esperando cierre.', rewardResult);
+                this.rewardGranted = true; // <-- Solo marcamos la recompensa
                 
-                // --- MODIFICACIÓN: TIMEOUT ELIMINADO ---
-                // adTimeout.remove();
-                // --- FIN MODIFICACIÓN ---
-
-                this.cleanupListeners();
-                this.hideAdLoadingUI();
+                // NO HACEMOS NADA MÁS.
+                // El evento 'onAppResume' (principal) o 'dismissHandler' (fallback)
+                // se encargarán de llamar a cleanupAndResume.
                 
-                // --- MODIFICADO: USA changeScene ---
-                //this.scene.start('GameScene', { score: this.score, fichas: 0, hasContinued: true });
-                changeScene(this, 'GameScene', { score: this.score, fichas: 0, hasContinued: true });
-
             } else {
-                cleanupAndResume("Anuncio visto pero sin recompensa");
+                console.log("Anuncio visto pero sin recompensa, esperando cierre.");
+                // Tampoco hacemos nada. El evento de cierre se encargará.
             }
         } catch (e) {
             console.error("ERROR CATASTRÓFICO en el flujo del anuncio:", e);
-            cleanupAndResume(`Excepción en try/catch: ${e.message}`);
+            this.cleanupAndResume(`Excepción en try/catch: ${e.message}`, false);
         }
     }
     
@@ -2371,6 +2388,7 @@ class GameOverScene extends Phaser.Scene {
         this.adListeners = [];
     }
 }
+// --- FIN DEL REEMPLAZO DE CLASE ---
 
 // =================================================================
 // GAME INITIALIZATION
